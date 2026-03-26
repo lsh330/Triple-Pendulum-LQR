@@ -1,104 +1,89 @@
-"""Region of Attraction (ROA) estimation via Monte Carlo simulation."""
+"""Region of Attraction (ROA) estimation via Monte Carlo simulation.
+
+Uses a single @njit function with parallel prange for maximum speed.
+"""
 
 import numpy as np
-from simulation.loop.time_loop import simulate
+from numba import njit, prange
+from simulation.loop.time_loop import _run_loop
+
+
+@njit(cache=True, parallel=True)
+def _roa_batch(n_samples, N, dt, q_eq, K_flat, p,
+               theta1_devs, theta2_devs, theta3_devs, conv_threshold):
+    """Run all ROA simulations in parallel using Numba prange."""
+    converged = np.zeros(n_samples, dtype=np.bool_)
+    dist_arr = np.empty(0)
+
+    for i in prange(n_samples):
+        q0 = q_eq.copy()
+        q0[1] += theta1_devs[i]
+        q0[2] += theta2_devs[i]
+        q0[3] += theta3_devs[i]
+        dq0 = np.zeros(4)
+
+        q_arr, dq_arr, _, _ = _run_loop(N, dt, q0, dq0, q_eq, K_flat, p, dist_arr)
+
+        # Check convergence at final timestep (NaN-safe)
+        max_dev = 0.0
+        has_nan = False
+        for j in range(1, 4):
+            dev = abs(q_arr[N - 1, j] - q_eq[j])
+            if np.isnan(dev):
+                has_nan = True
+                break
+            if dev > max_dev:
+                max_dev = dev
+        if (not has_nan) and (max_dev < conv_threshold):
+            converged[i] = True
+
+    return converged
 
 
 def estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, dt=0.001,
                  t_horizon=5.0, seed=42):
     """Estimate the region of attraction of the LQR controller.
 
-    Generates random initial angle deviations from equilibrium and simulates
-    the closed-loop system to determine which initial conditions converge.
-
-    Parameters
-    ----------
-    cfg : SystemConfig
-    K : ndarray (1, 8)
-        LQR gain matrix.
-    n_samples : int
-        Number of random initial conditions.
-    max_angle_deg : float
-        Maximum theta1 deviation in degrees.
-    dt : float
-        Integration time step.
-    t_horizon : float
-        Simulation horizon in seconds.
-    seed : int
-        Random seed for reproducibility.
-
-    Returns
-    -------
-    dict with keys:
-        'initial_conditions' : (n_samples, 4) array of initial q
-        'converged' : (n_samples,) boolean array
-        'success_rate' : float
-        'max_stable_deviation_deg' : float
-        'theta1_devs' : array of theta1 deviations in degrees
-        'theta2_devs' : array of theta2 deviations in degrees
-        'converged_mask' : boolean mask
+    Uses Numba parallel prange to distribute simulations across CPU cores.
     """
     rng = np.random.RandomState(seed)
     q_eq = cfg.equilibrium
+    p = cfg.pack()
+    K_flat = K.flatten()
 
     max_angle_rad = np.deg2rad(max_angle_deg)
-
-    # Generate random initial conditions
     theta1_devs_rad = rng.uniform(-max_angle_rad, max_angle_rad, n_samples)
     theta2_devs_rad = rng.uniform(-max_angle_rad / 2, max_angle_rad / 2, n_samples)
     theta3_devs_rad = rng.uniform(-max_angle_rad / 3, max_angle_rad / 3, n_samples)
 
-    initial_conditions = np.zeros((n_samples, 4))
-    converged = np.zeros(n_samples, dtype=bool)
+    N = int(np.ceil(t_horizon / dt)) + 1
+    conv_threshold = np.deg2rad(1.0)
 
-    convergence_threshold = np.deg2rad(1.0)  # 1 degree
+    # Warmup (compile the parallel function with small batch)
+    _roa_batch(2, min(N, 10), dt, q_eq, K_flat, p,
+               theta1_devs_rad[:2], theta2_devs_rad[:2], theta3_devs_rad[:2],
+               conv_threshold)
 
-    for i in range(n_samples):
-        # Set initial q: cart at 0, angles deviated from equilibrium
-        q0_custom = q_eq.copy()
-        q0_custom[0] = 0.0  # cart position fixed
-        q0_custom[1] += theta1_devs_rad[i]
-        q0_custom[2] += theta2_devs_rad[i]
-        q0_custom[3] += theta3_devs_rad[i]
-
-        initial_conditions[i] = q0_custom
-
-        # Simulate: we need to run with this custom initial condition.
-        # The simulate function sets q0 = q_eq, so we work around it
-        # by using the low-level _run_loop directly.
-        from simulation.loop.time_loop import _run_loop
-
-        p = cfg.pack()
-        K_flat = K.flatten()
-        N = int(np.ceil(t_horizon / dt)) + 1
-        dq0 = np.zeros(4)
-        dist_arr = np.empty(0)
-
-        q_arr, dq_arr, _, _ = _run_loop(N, dt, q0_custom, dq0, q_eq,
-                                         K_flat, p, dist_arr)
-
-        # Check convergence: max angle deviation < 1 degree at the end
-        q_final = q_arr[-1]
-        angle_devs = np.abs(q_final[1:] - q_eq[1:])
-        if np.max(angle_devs) < convergence_threshold:
-            converged[i] = True
+    converged = _roa_batch(n_samples, N, dt, q_eq, K_flat, p,
+                           theta1_devs_rad, theta2_devs_rad, theta3_devs_rad,
+                           conv_threshold)
 
     theta1_devs_deg = np.rad2deg(theta1_devs_rad)
     theta2_devs_deg = np.rad2deg(theta2_devs_rad)
-
     success_rate = np.mean(converged)
+    max_stable = np.max(np.abs(theta1_devs_deg[converged])) if np.any(converged) else 0.0
 
-    # Find max stable theta1 deviation
-    if np.any(converged):
-        max_stable_deviation_deg = np.max(np.abs(theta1_devs_deg[converged]))
-    else:
-        max_stable_deviation_deg = 0.0
+    initial_conditions = np.zeros((n_samples, 4))
+    initial_conditions[:, 0] = 0.0
+    initial_conditions[:, 1] = q_eq[1] + theta1_devs_rad
+    initial_conditions[:, 2] = q_eq[2] + theta2_devs_rad
+    initial_conditions[:, 3] = q_eq[3] + theta3_devs_rad
 
     return {
         'initial_conditions': initial_conditions,
         'converged': converged,
         'success_rate': float(success_rate),
-        'max_stable_deviation_deg': float(max_stable_deviation_deg),
+        'max_stable_deviation_deg': float(max_stable),
         'theta1_devs': theta1_devs_deg,
         'theta2_devs': theta2_devs_deg,
         'converged_mask': converged,
