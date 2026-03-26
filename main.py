@@ -1,9 +1,12 @@
 """Cart + Triple Inverted Pendulum: LQR optimal stabilization.
 
 Usage:
-    python main.py                     # Run with Medrano-Cerda defaults
-    python main.py --config config.yaml  # Run with custom YAML config
-    python main.py --impulse 10 --t-end 20
+    python main.py                          # Default Medrano-Cerda
+    python main.py --impulse 10 --t-end 20  # Custom parameters
+    python main.py --config config.yaml     # YAML configuration
+    python main.py --use-ilqr               # Enable iLQR
+    python main.py --gain-scheduler 3d      # 3D trilinear gain scheduling
+    python main.py --adaptive-q             # Inertia-scaled Q matrix
     python main.py --help
 """
 
@@ -38,10 +41,14 @@ def _build_parser():
     p.add_argument("--u-max", type=float, default=200.0, help="Actuator saturation [N]")
     p.add_argument("--seed", type=int, default=42, help="Random seed")
 
-    # Features
+    # Control features
     p.add_argument("--use-ilqr", action="store_true", help="Enable iLQR trajectory optimization")
     p.add_argument("--ilqr-horizon", type=int, default=500, help="iLQR planning horizon")
     p.add_argument("--ilqr-iterations", type=int, default=10, help="iLQR iterations")
+    p.add_argument("--gain-scheduler", choices=["1d", "3d"], default="1d",
+                   help="Gain scheduler: 1d (cubic Hermite on theta1) or 3d (trilinear on theta1,2,3)")
+    p.add_argument("--adaptive-q", action="store_true",
+                   help="Use inertia-scaled Q matrix (Bryson's rule) instead of fixed default")
 
     # Config file
     p.add_argument("--config", type=str, default=None, help="YAML config file path")
@@ -74,13 +81,11 @@ def _load_yaml_config(path):
     if cfg is None:
         return {}
 
-    # Validate known keys
     valid_sections = {"system", "simulation", "features"}
     for key in cfg:
         if key not in valid_sections:
             print(f"WARNING: Unknown config section '{key}' (expected: {valid_sections})")
 
-    # Validate numeric parameters are positive where required
     sys_params = cfg.get("system", {})
     for key in ["mc", "m1", "m2", "m3", "L1", "L2", "L3", "g"]:
         if key in sys_params:
@@ -97,23 +102,19 @@ def main(argv=None):
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    # Set log level
     import logging
     logging.getLogger("triple_pendulum").setLevel(getattr(logging, args.log_level))
 
-    # Apply YAML config if provided (overrides defaults, CLI overrides YAML)
     if args.config is not None:
         yaml_cfg = _load_yaml_config(args.config)
         sys_params = yaml_cfg.get("system", {})
         sim_params = yaml_cfg.get("simulation", {})
         feat_params = yaml_cfg.get("features", {})
 
-        # System params from YAML (only if not overridden by CLI)
         for key in ["mc", "m1", "m2", "m3", "L1", "L2", "L3", "g"]:
             if key in sys_params and f"--{key}" not in sys.argv:
                 setattr(args, key, sys_params[key])
 
-        # Simulation params from YAML (only if not overridden by CLI)
         yaml_to_cli = {"t_end": "--t-end", "dt": "--dt", "impulse": "--impulse",
                        "dist_amplitude": "--dist-amplitude", "dist_bandwidth": "--dist-bandwidth",
                        "u_max": "--u-max", "seed": "--seed"}
@@ -124,13 +125,16 @@ def main(argv=None):
             if ykey in sim_params and cli_flag not in sys.argv:
                 setattr(args, yaml_to_attr[ykey], sim_params[ykey])
 
-        # Feature params from YAML
         if feat_params.get("use_ilqr"):
             args.use_ilqr = True
         if "ilqr_horizon" in feat_params:
             args.ilqr_horizon = feat_params["ilqr_horizon"]
         if "ilqr_iterations" in feat_params:
             args.ilqr_iterations = feat_params["ilqr_iterations"]
+        if "gain_scheduler" in feat_params and "--gain-scheduler" not in sys.argv:
+            args.gain_scheduler = feat_params["gain_scheduler"]
+        if feat_params.get("adaptive_q") and "--adaptive-q" not in sys.argv:
+            args.adaptive_q = True
 
     cfg = SystemConfig(
         mc=args.mc, m1=args.m1, m2=args.m2, m3=args.m3,
@@ -143,6 +147,8 @@ def main(argv=None):
         seed=args.seed, u_max=args.u_max,
         use_ilqr=args.use_ilqr, ilqr_horizon=args.ilqr_horizon,
         ilqr_iterations=args.ilqr_iterations,
+        gain_scheduler_type=args.gain_scheduler,
+        adaptive_q=args.adaptive_q,
         no_display=args.no_display)
 
 

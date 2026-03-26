@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 from utils.logger import get_logger
 from pipeline.defaults import (T_END, DT, IMPULSE, DIST_AMPLITUDE,
                                 DIST_BANDWIDTH, SEED, U_MAX,
-                                USE_ILQR, ILQR_HORIZON, ILQR_ITERATIONS)
+                                USE_ILQR, ILQR_HORIZON, ILQR_ITERATIONS,
+                                GAIN_SCHEDULER, ADAPTIVE_Q)
 from pipeline.save_outputs import save_figure, save_animation
 from control.lqr import compute_lqr_gains
 from control.ilqr import compute_ilqr_gains
@@ -26,7 +27,7 @@ from visualization.lqr_plots.show_lqr_plots import show_lqr_plots
 from visualization.comparison_plots.show_comparison_plots import show_comparison_plots
 from analysis.region_of_attraction import estimate_roa
 from analysis.gain_scheduling_stability import verify_gain_scheduling_stability
-from control.gain_scheduling import GainScheduler
+from control.gain_scheduling import GainScheduler, MultiAxisGainScheduler
 from visualization.roa_plots.show_roa_plots import show_roa_plots
 from simulation.warmup import warmup_jit
 
@@ -37,8 +38,17 @@ log = get_logger()
 def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
         dist_amplitude=DIST_AMPLITUDE, dist_bandwidth=DIST_BANDWIDTH, seed=SEED,
         u_max=U_MAX, use_ilqr=USE_ILQR, ilqr_horizon=ILQR_HORIZON,
-        ilqr_iterations=ILQR_ITERATIONS, no_display=False):
-    """Run the full simulation pipeline."""
+        ilqr_iterations=ILQR_ITERATIONS, gain_scheduler_type=GAIN_SCHEDULER,
+        adaptive_q=ADAPTIVE_Q, no_display=False):
+    """Run the full simulation pipeline.
+
+    Parameters
+    ----------
+    gain_scheduler_type : str
+        "1d" for cubic Hermite on theta1, "3d" for trilinear on (theta1,2,3).
+    adaptive_q : bool
+        If True, use inertia-scaled Q matrix (Bryson's rule) instead of fixed.
+    """
 
     q_eq = cfg.equilibrium
 
@@ -46,16 +56,26 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     log.info("Warming up JIT-compiled functions...")
     warmup_jit()
 
-    # 1. LQR
+    # 1. LQR with optional adaptive Q
+    Q_mat = None
+    if adaptive_q:
+        from control.cost_matrices.default_Q import adaptive_Q
+        Q_mat = adaptive_Q(cfg)
+        log.info("Using adaptive Q matrix (Bryson's rule, inertia-scaled)")
+
     log.info("Computing LQR gains...")
-    K, A, B, P, Q, R = compute_lqr_gains(cfg)
+    K, A, B, P, Q, R = compute_lqr_gains(cfg, Q=Q_mat)
     cl = compute_closed_loop(A, B, K)
     log.info("K = %s", np.array2string(K.flatten(), precision=2))
     log.info("All CL poles stable: %s", cl['is_stable'])
 
-    # 1b. Gain scheduling (used in simulation when enabled)
-    log.info("Building gain scheduler...")
-    gs = GainScheduler(cfg)
+    # 1b. Gain scheduling
+    if gain_scheduler_type == "3d":
+        log.info("Building 3D multi-axis gain scheduler (7x5x5 = 175 points)...")
+        gs = MultiAxisGainScheduler(cfg)
+    else:
+        log.info("Building 1D gain scheduler (cubic Hermite, 7 points)...")
+        gs = GainScheduler(cfg)
 
     # 1c. iLQR (optional trajectory optimization)
     ilqr_data = None
@@ -73,7 +93,7 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
         log.info("  iLQR trajectory optimized: horizon=%d steps", ilqr_horizon)
         ilqr_data = {"K_traj": K_traj, "x_traj": x_traj}
 
-    # 1d. Control method comparison (PD, Pole Placement vs LQR)
+    # 1d. Control method comparison
     log.info("Computing control method comparison...")
     comparison_data = compare_controllers(A, B, K)
 
@@ -84,7 +104,7 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
                                 bandwidth=dist_bandwidth, seed=seed)
 
     # 3. Simulate with gain-scheduled control
-    log.info("Simulating (gain-scheduled)...")
+    log.info("Simulating (gain-scheduled, %s)...", gain_scheduler_type)
     t, q, dq, u_ctrl, u_dist = simulate(cfg, K, t_end=t_end, dt=dt,
                                           impulse=impulse, disturbance=dist,
                                           gain_scheduler=gs, u_max=u_max)
@@ -109,7 +129,8 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     log.info("  Max stable deviation: %.1f deg", roa_data['max_stable_deviation_deg'])
 
     log.info("Verifying gain scheduling stability...")
-    gs_stability = verify_gain_scheduling_stability(cfg, gs)
+    gs_1d = gs if isinstance(gs, GainScheduler) else GainScheduler(cfg)
+    gs_stability = verify_gain_scheduling_stability(cfg, gs_1d)
     log.info("  All operating points stable: %s", gs_stability['all_points_stable'])
     log.info("  Interpolated all stable: %s", gs_stability['interpolated_all_stable'])
     log.info("  Max Re(eigenvalue): %.4f", gs_stability['max_eigenvalue_real'])

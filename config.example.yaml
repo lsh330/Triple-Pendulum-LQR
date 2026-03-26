@@ -21,6 +21,8 @@ simulation:
   seed: 42             # Random seed
 
 features:
-  use_ilqr: false      # Enable iLQR trajectory optimization
-  ilqr_horizon: 500    # iLQR planning horizon steps
-  ilqr_iterations: 10  # iLQR iteration count
+  use_ilqr: false           # Enable iLQR trajectory optimization
+  ilqr_horizon: 500         # iLQR planning horizon steps
+  ilqr_iterations: 10       # iLQR iteration count
+  gain_scheduler: "1d"      # "1d" (cubic Hermite) or "3d" (trilinear 7x5x5)
+  adaptive_q: false         # Use inertia-scaled Q matrix (Bryson's rule)

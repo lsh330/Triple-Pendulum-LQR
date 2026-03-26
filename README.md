@@ -4,16 +4,18 @@ LQR-optimal stabilization of a triple inverted pendulum on a cart under band-lim
 
 > **Benchmark system**: All physical parameters are taken from the **Medrano-Cerda triple inverted pendulum** (University of Salford, UK, 1997), one of the most widely cited experimental benchmarks in robust and optimal control literature [1].
 
-> **v2.2** — All features fully integrated into the pipeline: gain-scheduled simulation is now the default (cubic Hermite interpolated LQR gains active during simulation), iLQR trajectory optimization connected via `--use-ilqr`, YAML CLI override priority fixed. CARE existence validation, matrix exponential discretization for iLQR, Halton quasi-random ROA with fast scalar kernel (3× speedup), NaN divergence detection, and post-simulation integrity checks.
+> **v2.3** — All implemented features are now fully connected to the pipeline with CLI/YAML control. Gain-scheduled simulation (1D cubic Hermite or 3D trilinear via `--gain-scheduler`), adaptive inertia-scaled Q matrix (`--adaptive-q`), iLQR trajectory optimization (`--use-ilqr`). CARE existence validation, matrix exponential discretization, Halton quasi-random ROA with fast scalar kernel (3× speedup), NaN divergence detection, and post-simulation integrity checks. Zero dead code.
 
 ## Quick Start
 
 ```bash
 pip install -e ".[test]"
-python main.py                          # Default Medrano-Cerda
+python main.py                          # Default Medrano-Cerda (1D gain scheduling)
 python main.py --impulse 10 --t-end 20  # Custom parameters
 python main.py --config config.yaml     # YAML configuration
-python main.py --use-ilqr               # Enable iLQR
+python main.py --use-ilqr               # Enable iLQR trajectory optimization
+python main.py --gain-scheduler 3d      # 3D trilinear gain scheduling (175 points)
+python main.py --adaptive-q             # Inertia-scaled Q matrix (Bryson's rule)
 python prebuild_cache.py                # Pre-build JIT cache
 pytest                                  # Run tests
 ```
@@ -64,6 +66,15 @@ python main.py --t-end 20 --dt 0.0005 --impulse 10 --dist-amplitude 20
 # Enable iLQR trajectory optimization
 python main.py --use-ilqr --ilqr-horizon 500 --ilqr-iterations 10
 
+# 3D trilinear gain scheduling (175 operating points)
+python main.py --gain-scheduler 3d
+
+# Inertia-scaled adaptive Q matrix (Bryson's rule)
+python main.py --adaptive-q
+
+# Combine features
+python main.py --gain-scheduler 3d --adaptive-q --use-ilqr
+
 # Suppress matplotlib display (headless mode)
 python main.py --no-display
 
@@ -87,6 +98,8 @@ python main.py --log-level DEBUG
 | `--use-ilqr` | flag | off | Enable iLQR trajectory optimization |
 | `--ilqr-horizon` | int | 500 | iLQR planning horizon steps |
 | `--ilqr-iterations` | int | 10 | iLQR iteration count |
+| `--gain-scheduler` | choice | 1d | Gain scheduler: `1d` (cubic Hermite on θ₁) or `3d` (trilinear on θ₁,θ₂,θ₃) |
+| `--adaptive-q` | flag | off | Use inertia-scaled Q matrix (Bryson's rule) instead of fixed default |
 | `--config` | str | None | Path to YAML configuration file |
 | `--no-display` | flag | off | Skip matplotlib interactive display |
 | `--log-level` | choice | INFO | Logging verbosity: DEBUG, INFO, WARNING |
