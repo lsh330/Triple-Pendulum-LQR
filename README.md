@@ -141,13 +141,51 @@ $$\gamma_i = \left( \frac{m_i}{2} + \sum_{j>i} m_j \right) L_i$$
 
 #### 2.4 Coriolis and Gravity
 
-The Coriolis/centrifugal vector is computed via Christoffel symbols:
+The Coriolis/centrifugal vector **h** = C(**q**, **q̇**)**q̇** is computed via Christoffel symbols of the first kind:
 
 $$h_i = \sum_{j,k} \Gamma_{ijk} \, \dot{q}_j \, \dot{q}_k$$
 
 $$\Gamma_{ijk} = \frac{1}{2} \left( \frac{\partial M_{ij}}{\partial q_k} + \frac{\partial M_{ik}}{\partial q_j} - \frac{\partial M_{jk}}{\partial q_i} \right)$$
 
-The gravity vector (with gravity constants g<sub>i</sub> = γ<sub>i</sub> · g):
+This requires the partial derivatives ∂M/∂q<sub>k</sub> for k = 1, 2, 3 (∂M/∂x = 0 since M does not depend on cart position).
+
+**Analytical derivation of ∂M/∂q<sub>k</sub>**
+
+The mass matrix elements depend on trigonometric functions of the generalized coordinates. Differentiating each element analytically:
+
+**∂M/∂θ<sub>1</sub>** — only the cart-link coupling terms (top row/left column) are affected, since the 3×3 pendulum block depends only on θ<sub>2</sub> and θ<sub>3</sub>:
+
+$$\frac{\partial m_{x1}}{\partial \theta_1} = -\gamma_1 \sin\phi_1 - \gamma_2 \sin\phi_2 - \gamma_3 \sin\phi_3$$
+
+$$\frac{\partial m_{x2}}{\partial \theta_1} = -\gamma_2 \sin\phi_2 - \gamma_3 \sin\phi_3$$
+
+$$\frac{\partial m_{x3}}{\partial \theta_1} = -\gamma_3 \sin\phi_3$$
+
+$$\frac{\partial M_{ij}^{\text{pend}}}{\partial \theta_1} = 0 \quad \text{(all pendulum block entries)}$$
+
+**∂M/∂θ<sub>2</sub>** — affects both the cart-link coupling and parts of the pendulum block:
+
+$$\frac{\partial m_{x1}}{\partial \theta_2} = -\gamma_2 \sin\phi_2 - \gamma_3 \sin\phi_3, \qquad \frac{\partial m_{x2}}{\partial \theta_2} = -\gamma_2 \sin\phi_2 - \gamma_3 \sin\phi_3, \qquad \frac{\partial m_{x3}}{\partial \theta_2} = -\gamma_3 \sin\phi_3$$
+
+$$\frac{\partial M_{11}}{\partial \theta_2} = -2\beta_1 \sin\theta_2 - 2\beta_2 \sin(\theta_2+\theta_3)$$
+
+$$\frac{\partial M_{12}}{\partial \theta_2} = -\beta_1 \sin\theta_2 - \beta_2 \sin(\theta_2+\theta_3), \qquad \frac{\partial M_{13}}{\partial \theta_2} = -\beta_2 \sin(\theta_2+\theta_3)$$
+
+All other pendulum block derivatives w.r.t. θ<sub>2</sub> are zero.
+
+**∂M/∂θ<sub>3</sub>** — affects cart-link coupling and most of the pendulum block:
+
+$$\frac{\partial m_{xi}}{\partial \theta_3} = -\gamma_3 \sin\phi_3 \quad (i = 1, 2, 3)$$
+
+$$\frac{\partial M_{11}}{\partial \theta_3} = -2\beta_2 \sin(\theta_2+\theta_3) - 2\beta_3 \sin\theta_3$$
+
+$$\frac{\partial M_{12}}{\partial \theta_3} = -\beta_2 \sin(\theta_2+\theta_3) - 2\beta_3 \sin\theta_3, \qquad \frac{\partial M_{13}}{\partial \theta_3} = -\beta_2 \sin(\theta_2+\theta_3) - \beta_3 \sin\theta_3$$
+
+$$\frac{\partial M_{22}}{\partial \theta_3} = -2\beta_3 \sin\theta_3, \qquad \frac{\partial M_{23}}{\partial \theta_3} = -\beta_3 \sin\theta_3, \qquad \frac{\partial M_{33}}{\partial \theta_3} = 0$$
+
+These closed-form derivatives eliminate the need for numerical finite differences, improving both accuracy (exact to machine precision) and performance (no extra mass matrix evaluations).
+
+**Gravity vector** (with gravity constants g<sub>i</sub> = γ<sub>i</sub> · g):
 
 $$G(\mathbf{q}) = \begin{bmatrix} 0 \\\ g_1 \sin \phi_1 + g_2 \sin \phi_2 + g_3 \sin \phi_3 \\\ g_2 \sin \phi_2 + g_3 \sin \phi_3 \\\ g_3 \sin \phi_3 \end{bmatrix}$$
 
@@ -233,7 +271,19 @@ Classical 4th-order Runge-Kutta with fixed step Δt:
 
 $$\mathbf{y}_{n+1} = \mathbf{y}_n + \frac{\Delta t}{6} \left( \mathbf{k}_1 + 2 \mathbf{k}_2 + 2 \mathbf{k}_3 + \mathbf{k}_4 \right)$$
 
-All dynamics functions (M, C, G, forward dynamics) are compiled to native machine code via Numba `@njit(cache=True)`.
+All dynamics functions (M, C, G, forward dynamics) and the entire simulation loop are compiled to native machine code via Numba `@njit(cache=True)`. The simulation loop runs entirely inside a single JIT-compiled function with zero Python interpreter overhead per timestep.
+
+### 7. Performance
+
+| Component | Method | Time (15s sim, dt=0.001) |
+|-----------|--------|--------------------------|
+| LQR (linearize + Riccati) | Numerical Jacobian + scipy CARE | ~0.19 s |
+| Simulation (15,001 steps) | Analytical Coriolis + JIT RK4 loop | **~0.055 s** |
+| Monte Carlo (20 samples) | ThreadPool parallel LQR | ~0.03 s |
+| Frequency analysis | scipy.signal | ~0.005 s |
+| **Total (excl. plots)** | | **~0.28 s** |
+
+The analytical Coriolis computation eliminates 8 mass matrix evaluations per timestep that the previous numerical approach required, yielding a **3.7× speedup** for the simulation core.
 
 ---
 
@@ -255,19 +305,17 @@ All results below use the Medrano-Cerda parameters with initial impulse = 5 N·s
 
 **Angular Velocities** (middle-right): Rate of change of each joint angle. High angular rates indicate rapid pendulum motion; the controller must suppress these to prevent toppling.
 
-**Cart Acceleration** (second-from-bottom left): Second time derivative of cart position, computed via numerical differentiation. Reflects the net force on the cart divided by total effective mass.
+**Cart Acceleration** (row 3, left): Second time derivative of cart position, computed via numerical differentiation. Reflects the net force on the cart divided by total effective mass.
 
-**Angular Accelerations** (second-from-bottom right): Second time derivative of each joint angle. Directly related to the torques experienced at each joint through the equations of motion.
-
-**Energy** (bottom-left): Breakdown of total mechanical energy into kinetic (translational + rotational) and gravitational potential components. In a conservative system without control, total energy would be constant; deviations reflect energy injected or dissipated by the controller.
+**Angular Accelerations** (row 3, right): Second time derivative of each joint angle. Directly related to the torques experienced at each joint through the equations of motion.
 
 **Energy** (row 4, left): Breakdown of total mechanical energy into kinetic (translational + rotational) and gravitational potential components. In a conservative system without control, total energy would be constant; deviations reflect energy injected or dissipated by the controller.
 
 **Phase Portrait** (row 4, right): State-space trajectories plotting angle deviation vs angular velocity for each link. In a stable system, trajectories converge to the origin; the shape of the spiral indicates the damping characteristics.
 
-**Control Force** (bottom-left): The single control input F applied to the cart over time. Peak annotations highlight the maximum actuator effort required during the initial transient.
+**Control Force** (row 5, left): The single control input F applied to the cart over time. Peak annotations highlight the maximum actuator effort required during the initial transient.
 
-**Joint Reaction Estimation** (bottom-right): Generalized accelerations (numerical second derivatives) for the cart and each joint. Serves as a proxy for the generalized forces acting through the equations of motion.
+**Joint Reaction Estimation** (row 5, right): Generalized accelerations (numerical second derivatives) for the cart and each joint. Serves as a proxy for the generalized forces acting through the equations of motion.
 
 #### Simulation Results for This System
 
