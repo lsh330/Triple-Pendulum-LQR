@@ -245,68 +245,115 @@ All results below use the Medrano-Cerda parameters with initial impulse = 5 N·s
 
 ![Dynamics Analysis](images/dynamics_analysis.png)
 
-**Cart Position** (top-left): The initial impulse displaces the cart to approximately −0.38 m. The LQR controller drives it back toward x = 0, but continuous noise causes persistent small oscillations around the origin. The cart never diverges, confirming closed-loop stability.
+#### Subplot Descriptions
 
-**Cart Velocity** (top-right): Peak velocity of ~1.8 m/s occurs at t = 0 due to the impulse. The controller rapidly damps this, with subsequent velocity fluctuations of ±0.3 m/s driven by the noise.
+**Cart Position** (top-left): Horizontal position of the cart over time. Indicates how far the cart translates from its initial position under the combined effect of external forcing and the control law.
 
-**Angle Deviations** (middle-left): Maximum deviation is ~5° for θ₁ (base link), ~3° for θ₂, and ~1.2° for θ₃. The base link shows the largest deviation because it directly couples to the cart motion. The decreasing deviation from base to tip reflects the LQR's heavy weighting (Q = 100) on all angles.
+**Cart Velocity** (top-right): Time derivative of the cart position. Shows the translational dynamics of the cart including transient and steady-state behavior.
 
-**Angular Velocities** (middle-right): Peak angular rates reach ~50°/s at the impulse. The controller suppresses these within ~1 second. The steady-state angular velocity noise is ~±10°/s, driven by the external disturbance.
+**Angle Deviations** (middle-left): Deviation of each joint angle from the upright equilibrium. Positive values indicate counterclockwise tilt; negative indicates clockwise. This is the primary measure of stabilization performance.
 
-**Cart Acceleration** (second-from-bottom left): Shows the control effort in acceleration space. The initial spike corresponds to the impulsive control response (~200 m/s²), then settles to ±20 m/s² during noise rejection.
+**Angular Velocities** (middle-right): Rate of change of each joint angle. High angular rates indicate rapid pendulum motion; the controller must suppress these to prevent toppling.
 
-**Angular Accelerations** (second-from-bottom right): Link accelerations peak at ~500°/s² during the initial transient. θ₃ (tip) shows the largest accelerations due to its low inertia and long moment arm.
+**Cart Acceleration** (second-from-bottom left): Second time derivative of cart position, computed via numerical differentiation. Reflects the net force on the cart divided by total effective mass.
 
-**Energy** (bottom-left): Kinetic energy (orange) spikes at t = 0 from the impulse. Potential energy (cyan) is nearly constant since the pendulum stays near upright. Total energy (dashed black) fluctuates as the controller continuously injects and dissipates energy.
+**Angular Accelerations** (second-from-bottom right): Second time derivative of each joint angle. Directly related to the torques experienced at each joint through the equations of motion.
 
-**Phase Portrait** (bottom-right): All three link trajectories (θᵢ vs θ̇ᵢ) spiral inward toward the origin (0, 0), providing visual confirmation of **asymptotic stability**. The spiraling pattern indicates underdamped oscillatory convergence.
+**Energy** (bottom-left): Breakdown of total mechanical energy into kinetic (translational + rotational) and gravitational potential components. In a conservative system without control, total energy would be constant; deviations reflect energy injected or dissipated by the controller.
+
+**Phase Portrait** (bottom-right): State-space trajectories plotting angle deviation vs angular velocity for each link. In a stable system, trajectories converge to the origin; the shape of the spiral indicates the damping characteristics.
+
+#### Simulation Results for This System
+
+- The initial 5 N·s impulse displaces the cart to approximately **−0.38 m**. The LQR controller returns it toward x = 0 within ~2 seconds, but continuous noise causes persistent oscillations of ±0.1 m.
+- Peak cart velocity reaches **~1.8 m/s** at t = 0. The controller damps this to ±0.3 m/s within 1 second.
+- Maximum angle deviations are **~5° (θ<sub>1</sub>), ~3° (θ<sub>2</sub>), ~1.2° (θ<sub>3</sub>)**. The base link shows the largest deviation because it directly couples to the cart translation. The decreasing deviation from base to tip reflects the combined effect of inertia distribution and the Q = 100 weighting on all angles.
+- Cart acceleration peaks at **~200 m/s²** at t = 0 (impulsive response), settling to ±20 m/s² during noise rejection.
+- θ<sub>3</sub> (tip link) shows the **largest angular accelerations** (~500°/s²) due to its low inertia (I<sub>3</sub> = 0.0374 kg·m²) and long moment arm (L<sub>3</sub> = 0.72 m).
+- Kinetic energy spikes at t = 0 from the impulse. Potential energy remains nearly constant near V ≈ (m<sub>1</sub> + m<sub>2</sub> + m<sub>3</sub>)gL<sub>total</sub>/2 since the pendulum stays near upright. Total energy **fluctuates** as the controller continuously injects and dissipates energy to counteract the stochastic disturbance.
+- All three phase trajectories **spiral inward** toward (0, 0), visually confirming asymptotic stability. The spiraling pattern indicates underdamped oscillatory convergence — consistent with the moderate damping (Q<sub>vel</sub> = 10) in the LQR cost.
+
+---
 
 ### Control Analysis
 
 ![Control Analysis](images/control_analysis.png)
 
-**Force Comparison** (top-left): The control force peaks at ~−500 N at t = 0 — the LQR applies maximum effort in the −x direction to counteract the +x impulse and prevent toppling. Subsequent control is ~±50 N, tracking the disturbance to maintain balance.
+#### Subplot Descriptions
 
-**Frequency Spectrum** (top-right): FFT of the control signal shows dominant energy below 5 Hz, matching the pendulum's natural frequencies. The disturbance spectrum rolls off at 3 Hz (the Butterworth cutoff). The controller bandwidth extends to ~10 Hz.
+**Force Comparison** (top-left): Time-domain overlay of the LQR control force and the external disturbance force applied to the cart. Shows the controller's reaction to the combined impulse and stochastic noise.
 
-**Bode Plot — Open Loop** (middle-left): Magnitude plot of |L(jω)| with the gain crossover frequency ω<sub>gc</sub> annotated. Phase margin (PM) and gain margin (GM) are displayed. The slope at crossover (in dB/decade) indicates stability margin quality. The −3 dB closed-loop bandwidth is also shown.
+**Frequency Spectrum** (top-right): Single-sided amplitude spectrum (FFT) of both the control signal and the disturbance. Reveals which frequency bands the controller is most active in and how the disturbance energy is distributed.
 
-**Nyquist Diagram** (middle-right): The Nyquist contour of L(jω) for ω > 0 (solid blue) and its reflection for ω < 0 (dashed). The critical point (−1 + 0j) is marked. Direction arrows show increasing ω. The minimum distance from the contour to (−1, 0) quantifies the robustness margin. The number of clockwise encirclements must equal n<sub>u</sub> = 3 (the number of unstable open-loop poles).
+**Bode Plot — Open Loop** (middle-left): Magnitude and phase of the open-loop transfer function L(jω) = K(sI − A)⁻¹B as a function of frequency. The gain crossover frequency ω<sub>gc</sub> (where |L| = 0 dB) and the phase at that frequency determine the phase margin. The phase crossover (where phase = −180°) determines the gain margin.
 
-**Sensitivity S(jω) and T(jω)** (second-from-bottom left): |S(jω)| (blue) should remain below 6 dB to avoid noise amplification. |T(jω)| (red) is the complementary sensitivity. Peak values M<sub>s</sub> and M<sub>t</sub> are annotated. The crossover frequency where |S| = |T| separates the disturbance rejection band from the noise attenuation band.
+**Nyquist Diagram** (middle-right): Polar plot of L(jω) in the complex plane as ω sweeps from 0 to ∞. The Nyquist stability criterion relates the number of encirclements of the critical point (−1 + 0j) to the number of closed-loop unstable poles. The minimum distance from the contour to (−1, 0) is a direct measure of robustness.
 
-**Pole Map** (second-from-bottom right): Open-loop poles (red crosses) include 3 in the right half-plane, confirming the system is **open-loop unstable**. Closed-loop poles (blue circles) are all in the left half-plane, confirming stabilization. Each pole is annotated with its damping ratio ζ = −Re(p) / |p|.
+**Sensitivity S(jω) and T(jω)** (second-from-bottom left): S(jω) = 1/(1 + L(jω)) is the sensitivity function — it maps disturbances to output. T(jω) = L(jω)/(1 + L(jω)) is the complementary sensitivity — it maps reference inputs to output. Together, S + T = 1. Peak |S| (denoted M<sub>s</sub>) is a key robustness metric: M<sub>s</sub> < 2 (6 dB) is generally required.
 
-**Bode Plot — Closed Loop** (bottom-left): Transfer function from disturbance d to cart position x. The −3 dB bandwidth and any resonance peaks are annotated.
+**Pole Map** (second-from-bottom right): Eigenvalues of the open-loop A matrix (system without control) and the closed-loop A − BK matrix (with LQR). Poles in the right half-plane indicate instability; the LQR must move all poles to the left half-plane. The damping ratio ζ of each pole determines the oscillatory decay rate.
 
-**Step Response** (bottom-right): Response to a unit step disturbance force. Annotated metrics: overshoot (%), settling time T<sub>s</sub> (2% band), rise time T<sub>r</sub> (10%→90%).
+**Bode Plot — Closed Loop** (bottom-left): Magnitude and phase of the closed-loop transfer function from disturbance input to cart position output. The −3 dB bandwidth indicates the effective frequency range of disturbance rejection. Resonance peaks indicate frequencies where disturbances are amplified.
+
+**Step Response** (bottom-right): Time-domain response of the closed-loop system to a unit step disturbance force. Standard performance metrics: overshoot (%), settling time T<sub>s</sub> (time to enter and stay within 2% of steady-state), and rise time T<sub>r</sub> (10% to 90% of steady-state).
+
+#### Simulation Results for This System
+
+- Control force peaks at **~−500 N** at t = 0. The negative sign means the LQR pushes the cart in −x to counteract the +x impulse. This aggressive initial response is necessary because the triple inverted pendulum is open-loop unstable — any delay in response causes exponential divergence.
+- The control spectrum shows dominant energy **below 5 Hz**, matching the natural frequency range of the three-link pendulum. The disturbance spectrum rolls off at 3 Hz (Butterworth cutoff). The controller bandwidth extends to ~10 Hz, meaning it can reject disturbances up to this frequency.
+- **Phase margin ≈ 72°** (well above the LQR-guaranteed minimum of 60°), confirming robust stability with safety margin against unmodeled phase lag.
+- The Nyquist contour makes **3 clockwise encirclements** of (−1, 0), exactly matching the 3 unstable open-loop poles — satisfying the Nyquist criterion for closed-loop stability.
+- Peak sensitivity M<sub>s</sub> ≈ 0 dB (|S| ≈ 1.0), indicating **no disturbance amplification** at any frequency. This is exceptionally good — typical control designs allow M<sub>s</sub> up to 6 dB.
+- The open-loop system has **3 poles in the right half-plane** (eigenvalues with positive real part), confirming the triple inverted pendulum is inherently unstable. The LQR moves all 8 poles to the left half-plane with damping ratios ranging from ζ ≈ 0.3 to ζ ≈ 1.0.
+- Step response shows the cart settling within **~3 seconds** after a unit step disturbance, with moderate overshoot. The steady-state offset is near zero due to the Q<sub>x</sub> = 10 weighting on cart position.
+
+---
 
 ### LQR Verification
 
 ![LQR Verification](images/lqr_verification.png)
 
-**Lyapunov Function V(t) = zᵀPz** (top-left): Plotted on log scale. Under ideal LQR (no disturbance), V(t) decreases monotonically. With noise, small increases occur but the overall trend is strongly decreasing. The percentage of timesteps where V̇ < 0 is displayed — values above 95% confirm robust stability.
+#### Subplot Descriptions
 
-**Riccati P Eigenvalues** (top-right): All 8 eigenvalues of P must be strictly positive for P to be positive definite. This is a **necessary condition** for the CARE solution to be valid and for V = zᵀPz to be a proper Lyapunov function. Green bars = positive.
+**Lyapunov Function V(t) = zᵀPz** (top-left): The quadratic Lyapunov function constructed from the CARE solution P. In the absence of disturbance, V(t) must decrease monotonically along every trajectory (V̇ < 0), which is the formal proof of asymptotic stability. With stochastic noise, V(t) may temporarily increase, but the overall trend must be decreasing.
 
-**LQR Cost Breakdown** (middle-left): Instantaneous state cost zᵀQz (blue) and control cost uᵀRu (red) on log scale. State cost dominates initially; control cost spikes at t = 0. Both decay exponentially.
+**Riccati P Eigenvalues** (top-right): Bar chart of the eigenvalues of the 8×8 matrix P. For P to be a valid Lyapunov matrix, it must be positive definite, meaning all eigenvalues must be strictly > 0. This is a necessary condition for the CARE solution to exist and for the LQR to be stabilizing.
 
-**Cumulative Cost J(t)** (middle-right): Running integral of the LQR objective. Convergence to a finite value confirms the infinite-horizon cost is bounded — a fundamental requirement of LQR optimality.
+**LQR Cost Breakdown** (middle-left): Decomposition of the instantaneous LQR cost into its two components: the state cost zᵀQz (penalizing deviation from equilibrium) and the control cost uᵀRu (penalizing actuator effort). The ratio between these reveals the controller's trade-off between performance and effort.
 
-**Return Difference |1 + L(jω)|** (bottom-left): The Kalman inequality requires this to be ≥ 0 dB at all frequencies. This is the **signature guarantee** of SISO LQR. The minimum value and frequency are annotated. Violation would indicate a non-optimal or incorrect LQR design.
+**Cumulative Cost J(t)** (middle-right): Running integral of the total instantaneous cost. The LQR is defined as the controller that minimizes J as t → ∞. If J(t) converges to a finite value, the infinite-horizon cost is bounded, confirming the LQR design is valid and the closed-loop system is stable.
 
-**Nyquist Encirclement Verification** (bottom-right): Nyquist contour with computed number of clockwise encirclements N<sub>CW</sub> of (−1, 0). For stability: N<sub>CW</sub> must equal the number of unstable open-loop poles n<sub>u</sub>. A PASS/FAIL indicator is displayed.
+**Return Difference |1 + L(jω)|** (bottom-left): Frequency-domain plot of the return difference, which is the key quantity in the Kalman inequality. For any SISO LQR design, |1 + L(jω)| ≥ 1 (i.e., ≥ 0 dB) must hold at all frequencies. This is a fundamental property of LQR — violation would indicate an implementation error or a non-optimal design.
+
+**Nyquist Encirclement Verification** (bottom-right): Independent verification of the Nyquist stability criterion. The algorithm computes the winding number of the Nyquist contour around (−1, 0) and compares it to the number of unstable open-loop poles. A PASS result confirms that the Nyquist criterion is satisfied.
+
+#### Simulation Results for This System
+
+- The Lyapunov function V(t) is **monotonically decreasing for > 95% of timesteps**, despite the continuous stochastic disturbance. The temporary increases correspond to moments when the noise pushes the system away from equilibrium faster than the controller can react. The overall exponential decay confirms robust stability.
+- All 8 eigenvalues of P are **strictly positive** (ranging from ~1 to ~10⁴), confirming P is positive definite. The large spread in eigenvalues reflects the different scales of the state variables (cart position in meters vs link angles in radians).
+- The state cost zᵀQz **dominates** the total cost during the initial transient (large angle deviations), while the control cost uᵀRu **spikes at t = 0** (peak actuator force of 500 N). Both decay exponentially with similar time constants, indicating the LQR achieves a balanced trade-off.
+- The cumulative cost J(t) **converges** to a finite value, confirming the infinite-horizon cost integral is bounded. Under the persistent noise, J(t) grows slowly in a linear fashion after the transient dies — this is expected since the noise continuously injects cost.
+- The return difference |1 + L(jω)| is **≥ 0 dB at all frequencies**, satisfying the Kalman inequality. This confirms the LQR design provides the guaranteed minimum gain margin of (−6 dB, +∞) and phase margin of ≥ 60°.
+- The Nyquist encirclement count is **N<sub>CW</sub> = 3**, exactly matching n<sub>u</sub> = 3 (the number of unstable open-loop poles). **PASS** — the Nyquist criterion is satisfied.
+
+---
 
 ### Animation
 
 ![Animation](images/animation.gif)
 
-Real-time animation of the cart-pendulum system. Each link is color-coded:
-- **Red**: Link 1 (L<sub>1</sub> = 0.402 m, m<sub>1</sub> = 1.323 kg)
-- **Green**: Link 2 (L<sub>2</sub> = 0.332 m, m<sub>2</sub> = 1.389 kg)
-- **Blue**: Link 3 (L<sub>3</sub> = 0.720 m, m<sub>3</sub> = 0.8655 kg)
+#### Description
 
-The faint red trace shows the trajectory of the tip (end of link 3). The gray cart oscillates about x = 0 while keeping all three links balanced upright against continuous random forcing.
+Real-time animation of the cart-pendulum system at 30 fps. The cart (gray rectangle) translates along the horizontal rail. Three rigid links are rendered with distinct colors:
+- **Red**: Link 1 (L<sub>1</sub> = 0.402 m, m<sub>1</sub> = 1.323 kg) — base link, directly attached to cart
+- **Green**: Link 2 (L<sub>2</sub> = 0.332 m, m<sub>2</sub> = 1.389 kg) — middle link
+- **Blue**: Link 3 (L<sub>3</sub> = 0.720 m, m<sub>3</sub> = 0.8655 kg) — tip link, longest and lightest
+
+The faint red trace shows the historical trajectory of the tip endpoint. The brown line indicates the ground/rail.
+
+#### Observations for This System
+
+The animation shows the cart initially displaced to the left by the impulse, then oscillating back toward the center while the three links sway slightly but never topple. The tip trace reveals persistent small oscillations driven by the band-limited noise, with the amplitude concentrated near the upright position. The LQR controller successfully maintains all three links within ~5° of vertical despite continuous random forcing — a challenging feat for a system with 3 unstable open-loop poles and only 1 control input.
 
 ---
 
