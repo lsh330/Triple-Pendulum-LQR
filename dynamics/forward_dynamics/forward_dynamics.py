@@ -15,10 +15,7 @@ def forward_dynamics(q, dq, u, p):
     G = gravity_vector(q, p)
     tau = assemble_tau(u)
 
-    # rhs = tau - C - G  (both C and G are 4x1)
-    rhs = np.zeros(4)
-    for i in range(4):
-        rhs[i] = tau[i] - C[i, 0] - G[i, 0]
+    rhs = tau - C - G
 
     ddq = solve_acceleration(M, rhs)
     return ddq

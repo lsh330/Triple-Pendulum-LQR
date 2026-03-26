@@ -5,10 +5,21 @@ from control.linearization.jacobian_u import compute_B_u
 from control.linearization.state_space import assemble_state_space
 
 
-def linearize(q_eq, p, eps=1e-5):
+def linearize(q_eq, p, eps=None):
     """Linearize the system about the equilibrium point.
 
     Returns (A, B) where A is 8x8 and B is 8x1.
+
+    Parameters
+    ----------
+    q_eq : ndarray (4,)
+        Configuration at the linearization point.
+    p : ndarray
+        Packed system parameters.
+    eps : float or None
+        Fixed finite-difference step.  None (default) uses an adaptive
+        per-component step of sqrt(machine_eps) * max(1, |x_i|), which
+        is theoretically optimal for central differences.
     """
     dq_eq = np.zeros(4)
     u_eq = 0.0  # scalar input
