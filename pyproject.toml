@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "triple-pendulum-lqr"
+version = "2.0.0"
+description = "Triple Pendulum simulation with LQR control"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.24,<2.1",
+    "scipy>=1.10,<1.15",
+    "numba>=0.57,<0.61",
+    "matplotlib>=3.6,<3.10",
+    "pillow>=9.0,<11.0",
+    "pyyaml>=6.0,<7.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0,<9.0",
+    "pytest-cov>=4.0,<6.0",
+]
+
+[project.scripts]
+triple-pendulum = "main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

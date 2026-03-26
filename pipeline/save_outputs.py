@@ -2,6 +2,10 @@
 
 import os
 
+from utils.logger import get_logger
+
+log = get_logger()
+
 IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "images")
 
 
@@ -14,7 +18,7 @@ def save_figure(fig, name, dpi=150):
     ensure_dir()
     path = os.path.join(IMAGES_DIR, f"{name}.png")
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
-    print(f"  Saved: {path}")
+    log.info("  Saved: %s", path)
 
 
 def save_animation(ani, name, fps=30):
@@ -23,6 +27,6 @@ def save_animation(ani, name, fps=30):
     path = os.path.join(IMAGES_DIR, f"{name}.gif")
     try:
         ani.save(path, writer="pillow", fps=fps)
-        print(f"  Saved: {path}")
+        log.info("  Saved: %s", path)
     except Exception as e:
-        print(f"  GIF save failed ({e}). Install pillow: pip install pillow")
+        log.warning("  GIF save failed (%s). Install pillow: pip install pillow", e)

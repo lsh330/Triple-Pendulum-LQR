@@ -20,12 +20,11 @@ def warmup_jit():
     from simulation.loop.control_law import compute_control
     compute_control(q, dq, q, np.zeros(8))
 
-    # Trigger legacy loops (used by ROA parallel)
-    from simulation.loop.time_loop import _run_loop, _run_loop_gs, _interp_gain_njit
+    # Trigger legacy loop (used by ROA parallel)
+    from simulation.loop.time_loop import _run_loop
     _run_loop(3, 0.001, q, dq, q, np.zeros(8), p, np.empty(0))
     dev = np.array([-0.35, 0.0, 0.35])
     Ks = np.zeros((3, 8))
-    _run_loop_gs(3, 0.001, q, dq, q, p, np.empty(0), dev, Ks)
 
     # Trigger fast dynamics and loops (used by main simulation)
     from dynamics.forward_dynamics.forward_dynamics_fast import forward_dynamics_fast, rk4_step_fast

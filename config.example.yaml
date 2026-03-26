@@ -1,0 +1,26 @@
+# Triple Inverted Pendulum LQR -- Example Configuration
+# Copy to config.yaml and customize. Run: python main.py --config config.yaml
+
+system:
+  mc: 2.4              # Cart mass [kg]
+  m1: 1.323            # Link 1 mass [kg]
+  m2: 1.389            # Link 2 mass [kg]
+  m3: 0.8655           # Link 3 mass [kg]
+  L1: 0.402            # Link 1 length [m]
+  L2: 0.332            # Link 2 length [m]
+  L3: 0.720            # Link 3 length [m]
+  g: 9.81              # Gravity [m/s^2]
+
+simulation:
+  t_end: 15.0          # Simulation duration [s]
+  dt: 0.001            # Integration time step [s]
+  impulse: 5.0         # Initial cart impulse [N*s]
+  dist_amplitude: 15.0 # Disturbance RMS [N]
+  dist_bandwidth: 3.0  # Noise cutoff frequency [Hz]
+  u_max: 200.0         # Actuator saturation [N]
+  seed: 42             # Random seed
+
+features:
+  use_ilqr: false      # Enable iLQR trajectory optimization
+  ilqr_horizon: 500    # iLQR planning horizon steps
+  ilqr_iterations: 10  # iLQR iteration count

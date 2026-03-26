@@ -64,10 +64,13 @@ def _roa_batch(n_samples, N, dt, q_eq, K_flat, p,
 
 
 def estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, dt=0.001,
-                 t_horizon=5.0, seed=42):
-    """Estimate the region of attraction of the LQR controller.
+                 t_horizon=5.0, seed=42, convergence_ci_width=0.05,
+                 max_samples=2000, batch_size=200):
+    """Estimate the region of attraction with adaptive sample sizing.
 
-    Uses Numba parallel prange to distribute simulations across CPU cores.
+    Runs batches of Monte Carlo simulations until the 95% confidence
+    interval for the success rate is narrower than convergence_ci_width,
+    or max_samples is reached.
     """
     rng = np.random.RandomState(seed)
     q_eq = cfg.equilibrium
@@ -75,39 +78,72 @@ def estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, dt=0.001,
     K_flat = K.flatten()
 
     max_angle_rad = np.deg2rad(max_angle_deg)
-    theta1_devs_rad = rng.uniform(-max_angle_rad, max_angle_rad, n_samples)
-    theta2_devs_rad = rng.uniform(-max_angle_rad / 2, max_angle_rad / 2, n_samples)
-    theta3_devs_rad = rng.uniform(-max_angle_rad / 3, max_angle_rad / 3, n_samples)
-
     N = int(np.ceil(t_horizon / dt)) + 1
     conv_threshold = np.deg2rad(1.0)
 
-    # Warmup (compile the parallel function with small batch)
+    all_theta1 = np.empty(0)
+    all_theta2 = np.empty(0)
+    all_theta3 = np.empty(0)
+    all_converged = np.empty(0, dtype=np.bool_)
+
+    # Warmup
+    warmup_t1 = rng.uniform(-max_angle_rad, max_angle_rad, 2)
+    warmup_t2 = rng.uniform(-max_angle_rad / 2, max_angle_rad / 2, 2)
+    warmup_t3 = rng.uniform(-max_angle_rad / 3, max_angle_rad / 3, 2)
     _roa_batch(2, min(N, 10), dt, q_eq, K_flat, p,
-               theta1_devs_rad[:2], theta2_devs_rad[:2], theta3_devs_rad[:2],
-               conv_threshold)
+               warmup_t1, warmup_t2, warmup_t3, conv_threshold)
 
-    converged = _roa_batch(n_samples, N, dt, q_eq, K_flat, p,
-                           theta1_devs_rad, theta2_devs_rad, theta3_devs_rad,
-                           conv_threshold)
+    total_samples = 0
+    while total_samples < max_samples:
+        current_batch = min(batch_size if total_samples > 0 else n_samples,
+                           max_samples - total_samples)
 
-    theta1_devs_deg = np.rad2deg(theta1_devs_rad)
-    theta2_devs_deg = np.rad2deg(theta2_devs_rad)
-    success_rate = np.mean(converged)
-    max_stable = np.max(np.abs(theta1_devs_deg[converged])) if np.any(converged) else 0.0
+        theta1_devs = rng.uniform(-max_angle_rad, max_angle_rad, current_batch)
+        theta2_devs = rng.uniform(-max_angle_rad / 2, max_angle_rad / 2, current_batch)
+        theta3_devs = rng.uniform(-max_angle_rad / 3, max_angle_rad / 3, current_batch)
 
-    initial_conditions = np.zeros((n_samples, 4))
+        converged = _roa_batch(current_batch, N, dt, q_eq, K_flat, p,
+                               theta1_devs, theta2_devs, theta3_devs,
+                               conv_threshold)
+
+        all_theta1 = np.concatenate([all_theta1, theta1_devs])
+        all_theta2 = np.concatenate([all_theta2, theta2_devs])
+        all_theta3 = np.concatenate([all_theta3, theta3_devs])
+        all_converged = np.concatenate([all_converged, converged])
+        total_samples += current_batch
+
+        # Check convergence of estimate
+        rate = np.mean(all_converged)
+        # Wilson score 95% CI width
+        z = 1.96
+        n = total_samples
+        denom = 1 + z*z/n
+        center = (rate + z*z/(2*n)) / denom
+        margin = z * np.sqrt((rate*(1-rate) + z*z/(4*n)) / n) / denom
+        ci_width = 2 * margin
+
+        if total_samples >= n_samples and ci_width < convergence_ci_width:
+            break
+
+    theta1_devs_deg = np.rad2deg(all_theta1)
+    theta2_devs_deg = np.rad2deg(all_theta2)
+    success_rate = np.mean(all_converged)
+    max_stable = np.max(np.abs(theta1_devs_deg[all_converged])) if np.any(all_converged) else 0.0
+
+    initial_conditions = np.zeros((total_samples, 4))
     initial_conditions[:, 0] = 0.0
-    initial_conditions[:, 1] = q_eq[1] + theta1_devs_rad
-    initial_conditions[:, 2] = q_eq[2] + theta2_devs_rad
-    initial_conditions[:, 3] = q_eq[3] + theta3_devs_rad
+    initial_conditions[:, 1] = q_eq[1] + all_theta1
+    initial_conditions[:, 2] = q_eq[2] + all_theta2
+    initial_conditions[:, 3] = q_eq[3] + all_theta3
 
     return {
         'initial_conditions': initial_conditions,
-        'converged': converged,
+        'converged': all_converged,
         'success_rate': float(success_rate),
         'max_stable_deviation_deg': float(max_stable),
         'theta1_devs': theta1_devs_deg,
         'theta2_devs': theta2_devs_deg,
-        'converged_mask': converged,
+        'converged_mask': all_converged,
+        'total_samples': total_samples,
+        'ci_width': float(ci_width) if total_samples > 0 else 1.0,
     }

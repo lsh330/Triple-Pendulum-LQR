@@ -1,3 +1,8 @@
+# NOTE: This array-based forward dynamics is kept for compatibility with:
+#   - control/linearization/ (JIT Jacobian computation)
+#   - analysis/region_of_attraction.py (via _run_loop -> rk4_step)
+#   - control/ilqr.py (_rk4_step)
+# The scalar-based forward_dynamics_fast.py is used for main simulation loops.
 import numpy as np
 from numba import njit
 

@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# YAML config (keep example, ignore user configs)
+config.yaml
+*.yaml
+!config.example.yaml
