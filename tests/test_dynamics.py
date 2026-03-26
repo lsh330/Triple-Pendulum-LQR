@@ -92,14 +92,19 @@ class TestForwardDynamics:
 
         np.testing.assert_allclose(ddq_arr, ddq_scalar, atol=1e-10)
 
-    def test_free_fall(self, p):
-        """At downward vertical (theta1=0), with no control, gravity should accelerate."""
+    def test_gravity_at_equilibria(self, p):
+        """Downward vertical is stable (zero accel); tilted from upright is unstable."""
         from dynamics.forward_dynamics.forward_dynamics import forward_dynamics
-        q = np.array([0.0, 0.0, 0.0, 0.0])
-        dq = np.zeros(4)
-        ddq = forward_dynamics(q, dq, 0.0, p)
-        # System should accelerate under gravity
-        assert np.linalg.norm(ddq) > 0
+        # Downward vertical (theta1=0): stable equilibrium, zero acceleration
+        q_down = np.array([0.0, 0.0, 0.0, 0.0])
+        ddq_down = forward_dynamics(q_down, np.zeros(4), 0.0, p)
+        np.testing.assert_allclose(ddq_down, 0.0, atol=1e-12,
+            err_msg="Downward vertical should be a stable equilibrium (zero accel)")
+
+        # Slightly tilted from upright (theta1=pi+0.01): gravity should accelerate
+        q_tilt = np.array([0.0, np.pi + 0.01, 0.0, 0.0])
+        ddq_tilt = forward_dynamics(q_tilt, np.zeros(4), 0.0, p)
+        assert np.linalg.norm(ddq_tilt) > 0, "Tilted from upright should accelerate"
 
     def test_consistency_multiple_configs(self, p):
         """Array and scalar dynamics must agree at various configurations."""
