@@ -113,13 +113,16 @@ def main(argv=None):
             if key in sys_params and f"--{key}" not in sys.argv:
                 setattr(args, key, sys_params[key])
 
-        # Simulation params from YAML
-        yaml_to_arg = {"t_end": "t_end", "dt": "dt", "impulse": "impulse",
-                       "dist_amplitude": "dist_amplitude", "dist_bandwidth": "dist_bandwidth",
-                       "u_max": "u_max", "seed": "seed"}
-        for ykey, akey in yaml_to_arg.items():
-            if ykey in sim_params:
-                setattr(args, akey, sim_params[ykey])
+        # Simulation params from YAML (only if not overridden by CLI)
+        yaml_to_cli = {"t_end": "--t-end", "dt": "--dt", "impulse": "--impulse",
+                       "dist_amplitude": "--dist-amplitude", "dist_bandwidth": "--dist-bandwidth",
+                       "u_max": "--u-max", "seed": "--seed"}
+        yaml_to_attr = {"t_end": "t_end", "dt": "dt", "impulse": "impulse",
+                        "dist_amplitude": "dist_amplitude", "dist_bandwidth": "dist_bandwidth",
+                        "u_max": "u_max", "seed": "seed"}
+        for ykey, cli_flag in yaml_to_cli.items():
+            if ykey in sim_params and cli_flag not in sys.argv:
+                setattr(args, yaml_to_attr[ykey], sim_params[ykey])
 
         # Feature params from YAML
         if feat_params.get("use_ilqr"):

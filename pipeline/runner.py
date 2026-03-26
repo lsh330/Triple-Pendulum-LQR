@@ -53,7 +53,11 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     log.info("K = %s", np.array2string(K.flatten(), precision=2))
     log.info("All CL poles stable: %s", cl['is_stable'])
 
-    # 1b. iLQR (optional trajectory optimization)
+    # 1b. Gain scheduling (used in simulation when enabled)
+    log.info("Building gain scheduler...")
+    gs = GainScheduler(cfg)
+
+    # 1c. iLQR (optional trajectory optimization)
     ilqr_data = None
     if use_ilqr:
         log.info("Computing iLQR trajectory optimization...")
@@ -66,10 +70,10 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
             cfg, q0_ilqr, dq0_ilqr,
             N_horizon=ilqr_horizon, dt=dt, n_iter=ilqr_iterations
         )
-        log.info("  iLQR converged: %d iterations, horizon=%d", ilqr_iterations, ilqr_horizon)
+        log.info("  iLQR trajectory optimized: horizon=%d steps", ilqr_horizon)
         ilqr_data = {"K_traj": K_traj, "x_traj": x_traj}
 
-    # 1c. Control method comparison (PD, Pole Placement vs LQR)
+    # 1d. Control method comparison (PD, Pole Placement vs LQR)
     log.info("Computing control method comparison...")
     comparison_data = compare_controllers(A, B, K)
 
@@ -79,11 +83,11 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     dist = generate_disturbance(t_tmp, amplitude=dist_amplitude,
                                 bandwidth=dist_bandwidth, seed=seed)
 
-    # 3. Simulate
-    log.info("Simulating...")
+    # 3. Simulate with gain-scheduled control
+    log.info("Simulating (gain-scheduled)...")
     t, q, dq, u_ctrl, u_dist = simulate(cfg, K, t_end=t_end, dt=dt,
                                           impulse=impulse, disturbance=dist,
-                                          u_max=u_max)
+                                          gain_scheduler=gs, u_max=u_max)
     log.info("Done: %d steps", len(t))
 
     # 4. Analysis
@@ -97,7 +101,7 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     mc_robustness = compute_monte_carlo_robustness(cfg)
     print_summary(q, dq, state, u_ctrl, u_dist, freq_data)
 
-    # 4b. ROA and Gain Scheduling analysis
+    # 4b. ROA and Gain Scheduling stability
     log.info("Estimating Region of Attraction...")
     roa_data = estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, t_horizon=5.0)
     log.info("  ROA success rate: %.0f%% (%d samples)",
@@ -105,7 +109,6 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     log.info("  Max stable deviation: %.1f deg", roa_data['max_stable_deviation_deg'])
 
     log.info("Verifying gain scheduling stability...")
-    gs = GainScheduler(cfg)
     gs_stability = verify_gain_scheduling_stability(cfg, gs)
     log.info("  All operating points stable: %s", gs_stability['all_points_stable'])
     log.info("  Interpolated all stable: %s", gs_stability['interpolated_all_stable'])

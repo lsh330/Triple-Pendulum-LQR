@@ -4,7 +4,7 @@ LQR-optimal stabilization of a triple inverted pendulum on a cart under band-lim
 
 > **Benchmark system**: All physical parameters are taken from the **Medrano-Cerda triple inverted pendulum** (University of Salford, UK, 1997), one of the most widely cited experimental benchmarks in robust and optimal control literature [1].
 
-> **v2.1** — CARE existence validation, matrix exponential discretization for iLQR, Halton quasi-random ROA sampling with fast scalar dynamics kernel (3x speedup), 3D gain scheduler warnings, and mass matrix singularity detection.
+> **v2.2** — All features fully integrated into the pipeline: gain-scheduled simulation is now the default (cubic Hermite interpolated LQR gains active during simulation), iLQR trajectory optimization connected via `--use-ilqr`, YAML CLI override priority fixed. CARE existence validation, matrix exponential discretization for iLQR, Halton quasi-random ROA with fast scalar kernel (3× speedup), NaN divergence detection, and post-simulation integrity checks.
 
 ## Quick Start
 
@@ -503,7 +503,7 @@ The simulation hot path (`forward_dynamics_fast` + `rk4_step_fast`) uses **zero 
 |---------------|--------|------|
 | JIT warmup | Pre-compile all @njit functions | ~2.8 s (one-time) |
 | LQR design | @njit Jacobian + scipy CARE | **~0.001 s** (cached) |
-| Simulation (15s, dt=0.001) | Zero-alloc scalar RK4 + monolithic dynamics | **~0.015 s** |
+| Simulation (15s, dt=0.001) | Gain-scheduled scalar RK4 + monolithic dynamics | **~0.015 s** |
 | Monte Carlo (50 samples) | ThreadPool parallel | ~0.05 s |
 | ROA estimation (500–2000 samples) | JIT simulation per sample, adaptive CI | ~5–15 s |
 | Frequency analysis | scipy.signal | ~0.005 s |

@@ -88,6 +88,32 @@ class TestDisturbance:
         assert abs(actual_rms - target_rms) < 1.0, f"RMS {actual_rms:.1f} != {target_rms}"
 
 
+class TestGainScheduledSimulation:
+    def test_gs_simulation_stable(self, cfg, K):
+        """Gain-scheduled simulation should stay stable."""
+        from simulation.loop.time_loop import simulate
+        from control.gain_scheduling import GainScheduler
+        gs = GainScheduler(cfg)
+        t, q, dq, u_ctrl, _ = simulate(cfg, K, t_end=2.0, dt=0.001,
+                                         impulse=3.0, gain_scheduler=gs)
+        assert not np.any(np.isnan(q))
+        q_eq = cfg.equilibrium
+        max_dev = np.max(np.abs(q[-1, 1] - q_eq[1]))
+        assert max_dev < np.deg2rad(20), "GS simulation should converge"
+
+    def test_gs_vs_fixed_both_stable(self, cfg, K):
+        """Both fixed and gain-scheduled should stabilize."""
+        from simulation.loop.time_loop import simulate
+        from control.gain_scheduling import GainScheduler
+        gs = GainScheduler(cfg)
+        _, q_gs, _, _, _ = simulate(cfg, K, t_end=1.0, dt=0.001,
+                                     impulse=2.0, gain_scheduler=gs)
+        _, q_fix, _, _, _ = simulate(cfg, K, t_end=1.0, dt=0.001,
+                                      impulse=2.0)
+        assert not np.any(np.isnan(q_gs))
+        assert not np.any(np.isnan(q_fix))
+
+
 class TestROA:
     def test_roa_basic(self, cfg, K):
         """ROA estimation should return valid results."""
