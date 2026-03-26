@@ -80,7 +80,7 @@ Notable feature: L₃ is the longest link (0.72 m) but lightest (0.87 kg), makin
 
 A cart of mass m_c translates along a horizontal rail. Three uniform rigid links form a serial chain attached to the cart by revolute joints. The generalized coordinates are:
 
-$$\mathbf{q} = \left[\begin{array}{c} x \\ \theta_1 \\ \theta_2 \\ \theta_3 \end{array}\right]$$
+$$\mathbf{q} = \begin{bmatrix} x \\\ \theta_1 \\\ \theta_2 \\\ \theta_3 \end{bmatrix}$$
 
 where:
 - x is the cart horizontal position
@@ -120,11 +120,11 @@ The transformation from absolute to relative angular velocities:
 
 $$\dot{\vec{\phi}} = J \, \dot{\vec{\theta}}$$
 
-$$J = \left[\begin{array}{ccc} 1 & 0 & 0 \\ 1 & 1 & 0 \\ 1 & 1 & 1 \end{array}\right]$$
+$$J = \begin{bmatrix} 1 & 0 & 0 \\\ 1 & 1 & 0 \\\ 1 & 1 & 1 \end{bmatrix}$$
 
 The resulting 4×4 symmetric mass matrix:
 
-$$M(\mathbf{q}) = \left[\begin{array}{cccc} M_t & m_{x1} & m_{x2} & m_{x3} \\ m_{x1} & M_{11} & M_{12} & M_{13} \\ m_{x2} & M_{12} & M_{22} & M_{23} \\ m_{x3} & M_{13} & M_{23} & M_{33} \end{array}\right]$$
+$$M(\mathbf{q}) = \begin{bmatrix} M_t & m_{x1} & m_{x2} & m_{x3} \\\ m_{x1} & M_{11} & M_{12} & M_{13} \\\ m_{x2} & M_{12} & M_{22} & M_{23} \\\ m_{x3} & M_{13} & M_{23} & M_{33} \end{bmatrix}$$
 
 where:
 - M_t = m_c + m₁ + m₂ + m₃ is the total system mass
@@ -149,11 +149,11 @@ $$\Gamma_{ijk} = \frac{1}{2} \left( \frac{\partial M_{ij}}{\partial q_k} + \frac
 
 The gravity vector (with gravity constants g_i = γ_i · g):
 
-$$G(\mathbf{q}) = \left[\begin{array}{c} 0 \\ g_1 \sin \phi_1 + g_2 \sin \phi_2 + g_3 \sin \phi_3 \\ g_2 \sin \phi_2 + g_3 \sin \phi_3 \\ g_3 \sin \phi_3 \end{array}\right]$$
+$$G(\mathbf{q}) = \begin{bmatrix} 0 \\\ g_1 \sin \phi_1 + g_2 \sin \phi_2 + g_3 \sin \phi_3 \\\ g_2 \sin \phi_2 + g_3 \sin \phi_3 \\\ g_3 \sin \phi_3 \end{bmatrix}$$
 
 #### 2.5 Equations of Motion
 
-$$M(\mathbf{q}) \, \ddot{\mathbf{q}} + C(\mathbf{q}, \dot{\mathbf{q}}) \, \dot{\mathbf{q}} + G(\mathbf{q}) = \left[\begin{array}{c} F \\ 0 \\ 0 \\ 0 \end{array}\right]$$
+$$M(\mathbf{q}) \, \ddot{\mathbf{q}} + C(\mathbf{q}, \dot{\mathbf{q}}) \, \dot{\mathbf{q}} + G(\mathbf{q}) = \begin{bmatrix} F \\\ 0 \\\ 0 \\\ 0 \end{bmatrix}$$
 
 ### 3. LQR Control Design
 
@@ -165,7 +165,7 @@ The 8-dimensional state-space form with **z** = (δ**q**, δ**q̇**)ᵀ:
 
 $$\dot{\mathbf{z}} = A \, \mathbf{z} + B \, u$$
 
-$$A = \left[\begin{array}{cc} \mathbf{0} & I \\ A_q & A_{\dot{q}} \end{array}\right], \qquad B = \left[\begin{array}{c} \mathbf{0} \\ B_u \end{array}\right]$$
+$$A = \begin{bmatrix} \mathbf{0} & I \\\ A_q & A_{\dot{q}} \end{bmatrix}, \qquad B = \begin{bmatrix} \mathbf{0} \\\ B_u \end{bmatrix}$$
 
 where the top-left and bottom-right blocks are 4×4, I is the 4×4 identity, and B is 8×1.
 
