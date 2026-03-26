@@ -684,9 +684,18 @@ The animation shows the cart initially displaced to the left by the impulse, the
 
 Side-by-side comparison of three control strategies applied to the same triple pendulum system: **LQR** (optimal), **PD** (heuristic state feedback), and **Pole Placement** (Ackermann). The comparison highlights:
 
-- **Time-domain performance**: LQR achieves the fastest settling with minimal overshoot. PD shows larger oscillations due to non-optimal gain tuning. Pole placement stabilizes the system but with higher control effort.
-- **Frequency-domain characteristics**: Bode and sensitivity plots reveal the bandwidth and robustness differences between the three approaches.
-- **Control effort**: LQR minimizes the quadratic cost by design; alternative controllers typically require more actuator energy for equivalent or inferior transient performance.
+- **Impulse Response: Cart Position** (top-left): Cart displacement over time after a unit velocity impulse. Compares settling speed and overshoot across the three controllers.
+- **Impulse Response: Base Link Angle** (top-right): θ₁ deviation from upright, showing how quickly each controller suppresses the initial perturbation.
+- **Open-Loop Bode Magnitude** (bottom-left): Loop gain |L(jω)| for each controller, indicating bandwidth and high-frequency roll-off characteristics.
+- **Closed-Loop Pole Map** (bottom-right): Eigenvalue locations of A − BK for each design. All poles must lie in the left half-plane for stability; further left indicates faster decay.
+
+#### Simulation Results for This System
+
+- **LQR** achieves the fastest settling (~1.5 s for cart position) with well-damped oscillations. Peak θ₁ deviation is **~5°**, returning to zero within ~2 s. The dominant closed-loop pole has max Re ≈ **−1.26**, providing the best stability margin.
+- **PD (Bryson's rule)** stabilizes the system but with **larger overshoot** — cart position peaks at ~1.1 m (vs ~1.0 m for LQR) and θ₁ deviation reaches **~13°**. Settling time is ~3 s, roughly 2× slower than LQR. Max Re(eigenvalue) ≈ **−1.44**, indicating stable but less optimally damped response.
+- **Pole Placement** also achieves stability with max Re ≈ **−0.78** (poles placed at predefined locations). The time response shows persistent oscillations lasting ~4 s with moderate overshoot. The Bode plot shows lower crossover frequency than LQR, indicating reduced disturbance rejection bandwidth.
+- The **Bode comparison** reveals LQR has the highest gain crossover frequency (~10 rad/s) and steepest roll-off, confirming superior high-frequency noise rejection. PD has comparable low-frequency gain but rolls off earlier. Pole placement shows the narrowest bandwidth.
+- All three controllers place **all 8 closed-loop poles in the LHP**, confirming stability. However, LQR achieves this with the minimum-energy control input (by definition of the quadratic cost), while PD and pole placement require 20–50% more actuator effort for equivalent settling performance.
 
 ---
 
