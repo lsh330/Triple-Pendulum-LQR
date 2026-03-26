@@ -6,3 +6,4 @@ IMPULSE = 5.0             # initial impulse on cart [N*s]
 DIST_AMPLITUDE = 15.0     # band-limited noise RMS [N]
 DIST_BANDWIDTH = 3.0      # noise cutoff frequency [Hz]
 SEED = 42                 # random seed for disturbance
+U_MAX = 200.0             # actuator force saturation limit [N]

@@ -10,7 +10,8 @@ from simulation.loop.time_loop import _run_loop
 
 @njit(cache=True, parallel=True)
 def _roa_batch(n_samples, N, dt, q_eq, K_flat, p,
-               theta1_devs, theta2_devs, theta3_devs, conv_threshold):
+               theta1_devs, theta2_devs, theta3_devs, conv_threshold,
+               u_max=1e30, cart_limit=2.0, angle_limit=1.5708):
     """Run all ROA simulations in parallel using Numba prange."""
     converged = np.zeros(n_samples, dtype=np.bool_)
     dist_arr = np.empty(0)
@@ -22,19 +23,38 @@ def _roa_batch(n_samples, N, dt, q_eq, K_flat, p,
         q0[3] += theta3_devs[i]
         dq0 = np.zeros(4)
 
-        q_arr, dq_arr, _, _ = _run_loop(N, dt, q0, dq0, q_eq, K_flat, p, dist_arr)
+        q_arr, dq_arr, _, _ = _run_loop(N, dt, q0, dq0, q_eq, K_flat, p,
+                                         dist_arr, u_max)
 
-        # Check convergence at final timestep (NaN-safe)
+        # Trajectory boundedness check (early exit on divergence)
+        failed = False
+        for k in range(N):
+            if np.isnan(q_arr[k, 0]):
+                failed = True
+                break
+            if abs(q_arr[k, 0] - q_eq[0]) > cart_limit:
+                failed = True
+                break
+            for j in range(1, 4):
+                if np.isnan(q_arr[k, j]):
+                    failed = True
+                    break
+                if abs(q_arr[k, j] - q_eq[j]) > angle_limit:
+                    failed = True
+                    break
+            if failed:
+                break
+
+        if failed:
+            continue
+
+        # Check convergence at final timestep
         max_dev = 0.0
-        has_nan = False
         for j in range(1, 4):
             dev = abs(q_arr[N - 1, j] - q_eq[j])
-            if np.isnan(dev):
-                has_nan = True
-                break
             if dev > max_dev:
                 max_dev = dev
-        if (not has_nan) and (max_dev < conv_threshold):
+        if max_dev < conv_threshold:
             converged[i] = True
 
     return converged

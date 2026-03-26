@@ -81,11 +81,13 @@ def compute_lqr_verification(t, q, dq, q_eq, K, A, B, P, Q, R, freq_w=None):
 
     n_unstable_ol = int(np.sum(np.linalg.eigvals(A).real > 0))
 
-    # Alternative check: since all CL poles are stable, Nyquist MUST be satisfied
+    # Eigenvalue analysis is the definitive stability check for LTI systems.
+    # The numerical winding number is a diagnostic cross-reference but can be
+    # inaccurate for high-order systems due to frequency sampling artifacts.
     A_cl_check = A - B @ K
-    cl_stable = np.all(np.linalg.eigvals(A_cl_check).real < 0)
-    # If CL is stable, the correct encirclement count must equal n_unstable_ol
-    nyquist_ok = cl_stable  # ground truth from eigenvalue analysis
+    cl_stable = bool(np.all(np.linalg.eigvals(A_cl_check).real < 0))
+    nyquist_numerical_match = (n_encirclements_cw == n_unstable_ol)
+    nyquist_ok = cl_stable
 
     # --- Closed-loop pole analysis ---
     A_cl = A - B @ K
@@ -105,6 +107,8 @@ def compute_lqr_verification(t, q, dq, q_eq, K, A, B, P, Q, R, freq_w=None):
         "n_encirclements_cw": n_encirclements_cw,
         "n_unstable_ol": int(n_unstable_ol),
         "nyquist_criterion_ok": nyquist_ok,
+        "nyquist_numerical_match": nyquist_numerical_match,
+        "cl_stable": cl_stable,
         "A_cl_eigenvalues": cl_eig,
         "A_cl_damping": damping,
         "A_cl_wn": wn,

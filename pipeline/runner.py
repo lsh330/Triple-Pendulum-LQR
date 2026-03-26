@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pipeline.defaults import T_END, DT, IMPULSE, DIST_AMPLITUDE, DIST_BANDWIDTH, SEED
+from pipeline.defaults import T_END, DT, IMPULSE, DIST_AMPLITUDE, DIST_BANDWIDTH, SEED, U_MAX
 from pipeline.save_outputs import save_figure, save_animation
 from control.lqr import compute_lqr_gains
 from control.closed_loop import compute_closed_loop
@@ -26,7 +26,8 @@ from simulation.warmup import warmup_jit
 
 
 def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
-        dist_amplitude=DIST_AMPLITUDE, dist_bandwidth=DIST_BANDWIDTH, seed=SEED):
+        dist_amplitude=DIST_AMPLITUDE, dist_bandwidth=DIST_BANDWIDTH, seed=SEED,
+        u_max=U_MAX):
     """Run the full simulation pipeline."""
 
     # 0. Pre-trigger all JIT compilations
@@ -49,7 +50,8 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     # 3. Simulate
     print("Simulating...")
     t, q, dq, u_ctrl, u_dist = simulate(cfg, K, t_end=t_end, dt=dt,
-                                          impulse=impulse, disturbance=dist)
+                                          impulse=impulse, disturbance=dist,
+                                          u_max=u_max)
     print(f"Done: {len(t)} steps")
 
     # 4. Analysis

@@ -50,10 +50,11 @@ The `run()` function accepts optional overrides:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `t_end` | 15.0 | Simulation duration in seconds |
-| `dt` | 0.002 | Integration time step in seconds |
+| `dt` | 0.001 | Integration time step in seconds |
 | `impulse` | 5.0 | Initial cart impulse in N·s |
 | `dist_amplitude` | 15.0 | Disturbance RMS amplitude in N |
 | `dist_bandwidth` | 3.0 | Disturbance cutoff frequency in Hz |
+| `u_max` | 200.0 | Actuator force saturation limit in N |
 
 ## Benchmark Parameters
 
@@ -233,13 +234,13 @@ $$K = R^{-1} B^T P, \qquad u = -K \mathbf{z}$$
 
 The linearization Jacobians (A<sub>q</sub>, A<sub>q̇</sub>, B<sub>u</sub>) are computed via central finite differences with **adaptive step size**:
 
-$$h_j = \sqrt{\epsilon_{\text{mach}}} \cdot \max(1, |q_j^*|)$$
+$$h_j = \epsilon_{\text{mach}}^{1/3} \cdot \max(1, |q_j^*|)$$
 
-where ε<sub>mach</sub> ≈ 2.2 × 10⁻¹⁶ is machine epsilon. This yields h ≈ 1.5 × 10⁻⁸ for unit-scale variables and h ≈ 4.7 × 10⁻⁸ for θ₁ = π, which is the theoretically optimal step for minimizing the sum of truncation and round-off errors in central differences.
+where ε<sub>mach</sub> ≈ 2.2 × 10⁻¹⁶ is machine epsilon. This yields h ≈ 6.1 × 10⁻⁶ for unit-scale variables and h ≈ 1.9 × 10⁻⁵ for θ₁ = π. For central differences, the truncation error is O(h²) and the roundoff error is O(ε/h); balancing these gives the optimal step h ≈ ε<sup>1/3</sup>, which is larger than the ε<sup>1/2</sup> optimum for forward differences.
 
 #### 3.5 Gain Scheduling
 
-A single LQR gain K is optimal only at the linearization point. To extend performance over larger deviations, gain scheduling precomputes LQR gains at multiple operating points:
+A single LQR gain K is optimal only at the linearization point. To extend performance over larger deviations, a heuristic local gain bank precomputes LQR gains at multiple operating points:
 
 $$\theta_1^{(i)} = \pi + \delta_i, \qquad \delta_i \in \{-20°, -10°, -5°, 0°, +5°, +10°, +20°\}$$
 
@@ -248,6 +249,8 @@ At each operating point, the system is re-linearized and a new LQR gain K<sup>(i
 $$K(\delta) = (1 - t) \, K^{(i)} + t \, K^{(i+1)}, \qquad t = \frac{\delta - \delta_i}{\delta_{i+1} - \delta_i}$$
 
 The interpolation is implemented inside a @njit-compiled function for zero Python overhead.
+
+**Note**: The operating points are not true equilibria — perturbing θ₁ while keeping q̇ = 0 and u = 0 does not satisfy the equations of motion. This is a heuristic local gain bank that works well near upright, not a rigorous equilibrium-family-based gain schedule.
 
 #### 3.6 Iterative LQR (iLQR)
 
@@ -292,11 +295,13 @@ The open-loop plant has n<sub>u</sub> unstable poles (right half-plane eigenvalu
 
 $$N_{\text{CW}} = n_u$$
 
+Closed-loop stability is verified definitively via eigenvalue analysis (exact for LTI systems). The numerical winding number is computed as a diagnostic cross-reference but can be inaccurate for high-order systems due to frequency sampling artifacts.
+
 #### 4.4 Region of Attraction (ROA)
 
 The LQR is designed around a linearization point and is only guaranteed to stabilize the nonlinear system within some neighborhood of that point. The **Region of Attraction** is the set of initial conditions from which the controller successfully returns the system to equilibrium.
 
-ROA is estimated via Monte Carlo simulation: random initial angle deviations are sampled uniformly, each is simulated for a fixed time horizon without disturbance, and convergence is checked (max angle deviation < 1° at end). The boundary of converged vs diverged initial conditions maps out the empirical ROA.
+ROA is estimated via Monte Carlo simulation: random initial angle deviations are sampled uniformly, each is simulated for a fixed time horizon without disturbance. Convergence requires both **trajectory boundedness** (cart position within ±2 m, angle deviations within ±90° throughout the entire simulation) and **final-state convergence** (max angle deviation < 1° at end). The early-exit on divergence also improves computational efficiency for unstable trajectories. The boundary of converged vs diverged initial conditions maps out the empirical ROA.
 
 #### 4.5 Gain Scheduling Stability
 
@@ -308,7 +313,15 @@ For the gain-scheduled controller (Section 3.5) to be stable, it is not sufficie
 
 If all interpolated points have stable eigenvalues, the gain-scheduled controller is verified to be robustly stable across its entire operating range.
 
-### 5. Disturbance Model
+### 5. Actuator Saturation
+
+The control force is subject to symmetric saturation:
+
+$$u_{\text{applied}} = \text{clip}(u_{\text{LQR}}, -u_{\max}, +u_{\max})$$
+
+where u<sub>max</sub> defaults to 200 N. The saturation is applied inside the @njit-compiled simulation loop with a branch-based clip (two comparisons per timestep, negligible overhead). This prevents unrealistic actuator forces during large transients and provides a more physically meaningful simulation.
+
+### 6. Disturbance Model
 
 Band-limited white noise, generated by FFT-filtering Gaussian noise through a 4th-order Butterworth lowpass:
 
@@ -318,7 +331,7 @@ $$H(j\omega) = \frac{1}{1 + (\omega / \omega_c)^4}$$
 
 where W(jω) is the white noise spectrum and ω<sub>c</sub> = 2πf<sub>c</sub> is the cutoff angular frequency.
 
-### 6. Numerical Integration
+### 7. Numerical Integration
 
 Classical 4th-order Runge-Kutta with fixed step Δt:
 
@@ -326,7 +339,7 @@ $$\mathbf{y}_{n+1} = \mathbf{y}_n + \frac{\Delta t}{6} \left( \mathbf{k}_1 + 2 \
 
 All dynamics functions (M, C, G, forward dynamics) and the entire simulation loop are compiled to native machine code via Numba `@njit(cache=True)`. The simulation loop runs entirely inside a single JIT-compiled function with zero Python interpreter overhead per timestep.
 
-### 7. Computational Optimization
+### 8. Computational Optimization
 
 | Optimization | Before | After | Speedup |
 |-------------|--------|-------|---------|

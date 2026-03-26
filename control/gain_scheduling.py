@@ -1,7 +1,13 @@
-"""Gain scheduling for the cart + triple pendulum.
+"""Heuristic local gain interpolation for the cart + triple pendulum.
 
 Precomputes LQR gains at multiple operating points (theta1 deviations from
 upright) and linearly interpolates at runtime based on the current state.
+
+Note: The operating points are NOT true equilibria — perturbing theta1 from
+upright while keeping dq=0 and u=0 does not satisfy the equations of motion
+(gravity produces nonzero accelerations). This is a heuristic local gain bank
+that works well for small deviations, not a rigorous equilibrium-family-based
+gain schedule. For larger deviations, a proper trim solver would be needed.
 
 The interpolation data is packed as plain numpy arrays so that a @njit
 function can perform the lookup inside the JIT-compiled simulation loop.

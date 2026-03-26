@@ -9,7 +9,7 @@ from dynamics.forward_dynamics.forward_dynamics import forward_dynamics
 
 
 @njit(cache=True)
-def _run_loop(N, dt, q0, dq0, q_eq, K_flat, p, disturbance):
+def _run_loop(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max=1e30):
     """JIT-compiled simulation loop. No Python overhead per step."""
     q_arr = np.empty((N, 4))
     dq_arr = np.empty((N, 4))
@@ -25,6 +25,10 @@ def _run_loop(N, dt, q0, dq0, q_eq, K_flat, p, disturbance):
 
     for k in range(N - 1):
         u_c = compute_control(q, dq, q_eq, K_flat)
+        if u_c > u_max:
+            u_c = u_max
+        elif u_c < -u_max:
+            u_c = -u_max
         u_ctrl_arr[k] = u_c
 
         u_d = 0.0
@@ -38,7 +42,12 @@ def _run_loop(N, dt, q0, dq0, q_eq, K_flat, p, disturbance):
         dq_arr[k + 1] = dq
 
     # Last step control
-    u_ctrl_arr[N - 1] = compute_control(q, dq, q_eq, K_flat)
+    u_c = compute_control(q, dq, q_eq, K_flat)
+    if u_c > u_max:
+        u_c = u_max
+    elif u_c < -u_max:
+        u_c = -u_max
+    u_ctrl_arr[N - 1] = u_c
     if has_dist and disturbance.shape[0] >= N:
         u_dist_arr[N - 1] = disturbance[N - 1]
     else:
@@ -75,7 +84,7 @@ def _interp_gain_njit(delta, dev_angles, K_gains):
 
 @njit(cache=True)
 def _run_loop_gs(N, dt, q0, dq0, q_eq, p, disturbance,
-                 gs_dev_angles, gs_K_gains):
+                 gs_dev_angles, gs_K_gains, u_max=1e30):
     """JIT-compiled simulation loop with gain-scheduled control."""
     q_arr = np.empty((N, 4))
     dq_arr = np.empty((N, 4))
@@ -93,6 +102,10 @@ def _run_loop_gs(N, dt, q0, dq0, q_eq, p, disturbance,
         delta = q[1] - q_eq[1]
         K_flat = _interp_gain_njit(delta, gs_dev_angles, gs_K_gains)
         u_c = compute_control(q, dq, q_eq, K_flat)
+        if u_c > u_max:
+            u_c = u_max
+        elif u_c < -u_max:
+            u_c = -u_max
         u_ctrl_arr[k] = u_c
 
         u_d = 0.0
@@ -108,7 +121,12 @@ def _run_loop_gs(N, dt, q0, dq0, q_eq, p, disturbance,
     # Last step control
     delta = q[1] - q_eq[1]
     K_flat = _interp_gain_njit(delta, gs_dev_angles, gs_K_gains)
-    u_ctrl_arr[N - 1] = compute_control(q, dq, q_eq, K_flat)
+    u_c = compute_control(q, dq, q_eq, K_flat)
+    if u_c > u_max:
+        u_c = u_max
+    elif u_c < -u_max:
+        u_c = -u_max
+    u_ctrl_arr[N - 1] = u_c
     if has_dist and disturbance.shape[0] >= N:
         u_dist_arr[N - 1] = disturbance[N - 1]
     else:
@@ -118,7 +136,7 @@ def _run_loop_gs(N, dt, q0, dq0, q_eq, p, disturbance,
 
 
 def simulate(cfg, K, t_end=10.0, dt=0.001, impulse=0.0, disturbance=None,
-             gain_scheduler=None):
+             gain_scheduler=None, u_max=1e30):
     """Run a closed-loop simulation of the cart + triple pendulum.
 
     Parameters
@@ -132,6 +150,8 @@ def simulate(cfg, K, t_end=10.0, dt=0.001, impulse=0.0, disturbance=None,
     disturbance : ndarray or None
     gain_scheduler : GainScheduler or None
         If provided, uses gain-scheduled control instead of fixed K.
+    u_max : float
+        Symmetric actuator force saturation limit (N). Default 1e30 (no limit).
     """
     p = cfg.pack()
     q_eq = cfg.equilibrium
@@ -164,7 +184,7 @@ def simulate(cfg, K, t_end=10.0, dt=0.001, impulse=0.0, disturbance=None,
                          gs_dev, gs_K)
 
         q_arr, dq_arr, u_ctrl_arr, u_dist_arr = _run_loop_gs(
-            N, dt, q0, dq0, q_eq, p, dist_arr, gs_dev, gs_K
+            N, dt, q0, dq0, q_eq, p, dist_arr, gs_dev, gs_K, u_max
         )
     else:
         # Warmup JIT (first call compiles)
@@ -172,7 +192,7 @@ def simulate(cfg, K, t_end=10.0, dt=0.001, impulse=0.0, disturbance=None,
             _run_loop(3, dt, q0, dq0, q_eq, K_flat, p, dist_arr[:3] if dist_arr.shape[0] >= 3 else np.empty(0))
 
         q_arr, dq_arr, u_ctrl_arr, u_dist_arr = _run_loop(
-            N, dt, q0, dq0, q_eq, K_flat, p, dist_arr
+            N, dt, q0, dq0, q_eq, K_flat, p, dist_arr, u_max
         )
 
     return t_arr, q_arr, dq_arr, u_ctrl_arr, u_dist_arr

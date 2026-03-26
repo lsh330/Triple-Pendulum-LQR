@@ -36,7 +36,7 @@ def compute_jacobians_jit(q_eq, dq_eq, u_eq, p):
     # --- A_q: central diff of forward_dynamics w.r.t. q (4x4) ---
     A_q = np.empty((n, n))
     for j in range(n):
-        h = 1.49e-8 * max(1.0, abs(q_eq[j]))
+        h = 6.06e-6 * max(1.0, abs(q_eq[j]))
         q_plus = q_eq.copy()
         q_minus = q_eq.copy()
         q_plus[j] += h
@@ -49,7 +49,7 @@ def compute_jacobians_jit(q_eq, dq_eq, u_eq, p):
     # --- A_dq: central diff of forward_dynamics w.r.t. dq (4x4) ---
     A_dq = np.empty((n, n))
     for j in range(n):
-        h = 1.49e-8 * max(1.0, abs(dq_eq[j]))
+        h = 6.06e-6 * max(1.0, abs(dq_eq[j]))
         dq_plus = dq_eq.copy()
         dq_minus = dq_eq.copy()
         dq_plus[j] += h
@@ -60,7 +60,7 @@ def compute_jacobians_jit(q_eq, dq_eq, u_eq, p):
             A_dq[i, j] = (ddq_plus[i] - ddq_minus[i]) / (2.0 * h)
 
     # --- B_u: central diff of forward_dynamics w.r.t. u (4x1) ---
-    h_u = 1.49e-8 * max(1.0, abs(u_eq))
+    h_u = 6.06e-6 * max(1.0, abs(u_eq))
     ddq_plus = forward_dynamics(q_eq, dq_eq, u_eq + h_u, p)
     ddq_minus = forward_dynamics(q_eq, dq_eq, u_eq - h_u, p)
     B_u = np.empty((n, 1))
