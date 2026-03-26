@@ -14,7 +14,9 @@ def adaptive_Q(cfg):
     """
     # Cart position: scale by total mass (heavier = slower response)
     Mt = cfg.mc + cfg.m1 + cfg.m2 + cfg.m3
-    q_cart = 10.0 * Mt / 6.0  # normalized to Medrano-Cerda total mass
+    # Bryson's rule: scale cart penalty by total mass relative to baseline
+    # For Medrano-Cerda (Mt≈6kg): q_cart≈10. For heavier systems: proportionally more
+    q_cart = max(1.0, 10.0 * np.sqrt(Mt / max(cfg.mc, 0.1)))
 
     # Angles: scale by inverse of link inertia (lighter links need more penalty)
     I1 = cfg.m1 * cfg.L1**2 / 3.0

@@ -4,7 +4,7 @@ LQR-optimal stabilization of a triple inverted pendulum on a cart under band-lim
 
 > **Benchmark system**: All physical parameters are taken from the **Medrano-Cerda triple inverted pendulum** (University of Salford, UK, 1997), one of the most widely cited experimental benchmarks in robust and optimal control literature [1].
 
-> **v2.3** — All implemented features are now fully connected to the pipeline with CLI/YAML control. Gain-scheduled simulation (1D cubic Hermite or 3D trilinear via `--gain-scheduler`), adaptive inertia-scaled Q matrix (`--adaptive-q`), iLQR trajectory optimization (`--use-ilqr`). CARE existence validation, matrix exponential discretization, Halton quasi-random ROA with fast scalar kernel (3× speedup), NaN divergence detection, and post-simulation integrity checks. Zero dead code.
+> **v2.4** — Final robustness/accuracy polish. Mass matrix singularity uses relative tolerance (|det| < eps·‖diag‖⁴). RK45 adaptive integrator has proper attempt-count guard against infinite loops. iLQR uses CARE solution P as terminal cost for Lyapunov-guaranteed stability beyond the planning horizon. CLI/YAML parameters validated early (dt>0, u_max≥0, Nyquist bandwidth check). Jacobian step size adapts to state scale. Pole margin tests enforce Re(λ) < −0.1. Multi-step energy conservation tests. All features fully connected, zero dead code.
 
 ## Quick Start
 

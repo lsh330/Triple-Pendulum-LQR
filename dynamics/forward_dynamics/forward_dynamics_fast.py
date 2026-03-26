@@ -146,7 +146,8 @@ def forward_dynamics_fast(q0, q1, q2, q3, dq0, dq1, dq2, dq3, u, p):
     A32 = -_det3(m00, m01, m03, m10, m11, m13, m20, m21, m23)
     A33 = _det3(m00, m01, m02, m10, m11, m12, m20, m21, m22)
 
-    if abs(det) < 1e-30:
+    diag_max = max(abs(m00), abs(m11), abs(m22), abs(m33))
+    if abs(det) < 1e-12 * (diag_max * diag_max * diag_max * diag_max + 1e-30):
         return 0.0, 0.0, 0.0, 0.0
 
     inv_det = 1.0 / det

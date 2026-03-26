@@ -26,6 +26,12 @@ def generate_disturbance(t_arr, amplitude=20.0, bandwidth=5.0, seed=42):
     N = len(t_arr)
     dt = t_arr[1] - t_arr[0]
 
+    nyquist_freq = 0.5 / dt
+    if bandwidth > nyquist_freq:
+        from utils.logger import get_logger
+        get_logger().warning("Disturbance bandwidth (%.1f Hz) exceeds Nyquist frequency (%.1f Hz). "
+                           "Aliasing will occur.", bandwidth, nyquist_freq)
+
     white = generate_white_noise(N, seed=seed)
     filtered = apply_lowpass(white, dt, bandwidth)
     d_arr = normalize_rms(filtered, amplitude)

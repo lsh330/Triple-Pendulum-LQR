@@ -53,7 +53,8 @@ class TestClosedLoopStability:
         from control.closed_loop import compute_closed_loop
         cl = compute_closed_loop(A, B, K)
         assert cl["is_stable"], "Closed-loop system should be stable"
-        assert np.all(cl["poles"].real < 0)
+        max_re = np.max(cl["poles"].real)
+        assert max_re < -0.1, f"Dominant pole too close to imaginary axis: Re={max_re:.4f}"
 
     def test_return_difference(self, lqr_data):
         """Kalman inequality: |1 + L(jw)| >= 1 for all w."""

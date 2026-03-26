@@ -53,7 +53,9 @@ def solve_acceleration(M, rhs):
 
     # adj(M) = cofactor matrix transposed, so adj[i,j] = A[j,i]
     # x = adj(M) * rhs / det
-    if abs(det) < 1e-30:
+    # Relative singularity check: |det| < eps * max(|diag|)^4
+    diag_max = max(abs(m00), abs(m11), abs(m22), abs(m33))
+    if abs(det) < 1e-12 * (diag_max * diag_max * diag_max * diag_max + 1e-30):
         # Mass matrix near-singular: return zeros to avoid NaN propagation
         x = np.zeros(4)
         return x

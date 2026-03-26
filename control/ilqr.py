@@ -104,7 +104,7 @@ def compute_ilqr_gains(cfg, q0, dq0, N_horizon=500, dt=0.001, n_iter=10):
     Q = default_Q()
     R = default_R()
 
-    K_lqr, _, _, _, _, _ = compute_lqr_gains(cfg)
+    K_lqr, _, _, P_lqr, _, _ = compute_lqr_gains(cfg)
     K_flat = K_lqr.flatten()
 
     x_traj = np.zeros((N_horizon, n_x))
@@ -131,7 +131,7 @@ def compute_ilqr_gains(cfg, q0, dq0, N_horizon=500, dt=0.001, n_iter=10):
     for iteration in range(n_iter):
         # --- Backward pass: Riccati recursion ---
         K_seq = np.zeros((N_horizon, n_u, n_x))
-        S = Q.copy()  # terminal cost-to-go
+        S = P_lqr.copy()  # Terminal cost = CARE solution (Lyapunov stability guarantee)
 
         for k in range(N_horizon - 2, -1, -1):
             qk = x_traj[k, :4].copy()

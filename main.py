@@ -105,6 +105,16 @@ def main(argv=None):
     import logging
     logging.getLogger("triple_pendulum").setLevel(getattr(logging, args.log_level))
 
+    # Validate simulation parameters
+    if args.dt <= 0:
+        print("ERROR: --dt must be positive"); sys.exit(1)
+    if args.t_end <= 0:
+        print("ERROR: --t-end must be positive"); sys.exit(1)
+    if args.u_max < 0:
+        print("ERROR: --u-max must be non-negative"); sys.exit(1)
+    if args.t_end < args.dt:
+        print(f"WARNING: --t-end ({args.t_end}) < --dt ({args.dt}), simulation will have only 1 step")
+
     if args.config is not None:
         yaml_cfg = _load_yaml_config(args.config)
         sys_params = yaml_cfg.get("system", {})

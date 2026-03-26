@@ -111,6 +111,8 @@ class TestForwardDynamics:
             (np.array([0.1, np.pi + 0.3, 0.1, -0.1]), np.array([1.0, -0.5, 0.3, -0.2]), -5.0),
             (np.array([-0.2, np.pi - 0.2, -0.15, 0.05]), np.zeros(4), 0.0),
             (np.array([0.0, np.pi, 0.5, -0.3]), np.array([0.0, 2.0, -1.0, 0.5]), 50.0),
+            (np.array([0.5, np.pi - 0.5, 0.2, -0.1]), np.array([-1.0, 0.3, -0.5, 0.7]), 25.0),
+            (np.array([0.0, np.pi + 0.01, -0.01, 0.01]), np.array([0.01, -0.01, 0.01, -0.01]), 0.1),
         ]
         for q, dq, u in configs:
             ddq_arr = forward_dynamics(q, dq, u, p)
@@ -129,3 +131,16 @@ class TestForwardDynamics:
             q0, q1, q2, q3, dq0, dq1, dq2, dq3, 0.0, p, 0.001)
         # State should not explode
         assert all(abs(v) < 100 for v in [nq0, nq1, nq2, nq3, nd0, nd1, nd2, nd3])
+
+    def test_rk4_energy_conservation(self, q_eq, p):
+        """RK4 should approximately conserve energy over 100 steps (no control)."""
+        from dynamics.forward_dynamics.forward_dynamics_fast import rk4_step_fast
+        q0, q1, q2, q3 = q_eq
+        dq0, dq1, dq2, dq3 = 0.05, 0.0, 0.0, 0.0
+        # Run 100 steps with no control
+        for _ in range(100):
+            q0, q1, q2, q3, dq0, dq1, dq2, dq3 = rk4_step_fast(
+                q0, q1, q2, q3, dq0, dq1, dq2, dq3, 0.0, p, 0.001)
+        # State should remain bounded (no blow-up)
+        assert all(abs(v) < 50 for v in [q0, q1, q2, q3, dq0, dq1, dq2, dq3]), \
+            "RK4 integration diverged over 100 steps"

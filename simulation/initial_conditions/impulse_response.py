@@ -20,6 +20,11 @@ def apply_impulse(q_eq, p, impulse):
     dq_0 : ndarray (4,)
     """
     M = mass_matrix(q_eq, p)
+    cond = np.linalg.cond(M)
+    if cond > 1e8:
+        from utils.logger import get_logger
+        get_logger().warning("Mass matrix poorly conditioned (cond=%.1e) at impulse point. "
+                           "Initial velocities may be inaccurate.", cond)
     rhs = np.zeros(4)
     rhs[0] = impulse
     dq_0 = np.linalg.solve(M, rhs)

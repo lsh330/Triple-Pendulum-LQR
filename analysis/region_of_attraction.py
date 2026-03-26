@@ -93,6 +93,7 @@ def _halton_sequence(n_samples, dim, seed=0):
     Low-discrepancy sequence with O(log(N)^d / N) convergence
     vs O(1/sqrt(N)) for pseudo-random — requires ~30% fewer samples.
     """
+    assert dim <= 10, f"Halton sequence supports at most 10 dimensions, got {dim}"
     primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29][:dim]
     result = np.empty((n_samples, dim))
     for d in range(dim):

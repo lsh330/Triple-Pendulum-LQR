@@ -46,6 +46,7 @@ def rk45_adaptive_step(q0, q1, q2, q3, dq0, dq1, dq2, dq3, u, p,
     """
     t_remaining = dt
     n_substeps = 0
+    n_attempts = 0
     h = dt
 
     sq0, sq1, sq2, sq3 = q0, q1, q2, q3
@@ -54,6 +55,8 @@ def rk45_adaptive_step(q0, q1, q2, q3, dq0, dq1, dq2, dq3, u, p,
     while t_remaining > 1e-15:
         if h > t_remaining:
             h = t_remaining
+
+        n_attempts += 1
 
         # Stage 1
         f1_q0, f1_q1, f1_q2, f1_q3, f1_d0, f1_d1, f1_d2, f1_d3 = _eval_rhs(
@@ -159,7 +162,7 @@ def rk45_adaptive_step(q0, q1, q2, q3, dq0, dq1, dq2, dq3, u, p,
             h = h * 5.0
 
         # Prevent infinite loops
-        if n_substeps > 10000:
+        if n_substeps > 10000 or n_attempts > 50000:
             break
 
     return sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3, n_substeps
