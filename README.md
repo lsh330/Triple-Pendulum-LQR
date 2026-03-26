@@ -4,7 +4,7 @@ LQR-optimal stabilization of a triple inverted pendulum on a cart under band-lim
 
 > **Benchmark system**: All physical parameters are taken from the **Medrano-Cerda triple inverted pendulum** (University of Salford, UK, 1997), one of the most widely cited experimental benchmarks in robust and optimal control literature [1].
 
-> **v2.4** — Final robustness/accuracy polish. Mass matrix singularity uses relative tolerance (|det| < eps·‖diag‖⁴). RK45 adaptive integrator has proper attempt-count guard against infinite loops. iLQR uses CARE solution P as terminal cost for Lyapunov-guaranteed stability beyond the planning horizon. CLI/YAML parameters validated early (dt>0, u_max≥0, Nyquist bandwidth check). Jacobian step size adapts to state scale. Pole margin tests enforce Re(λ) < −0.1. Multi-step energy conservation tests. All features fully connected, zero dead code.
+> **v2.4** — Production-grade release. All features pipeline-connected with CLI/YAML control. Analytical + numerical hybrid Jacobians, gain-scheduled simulation (1D/3D), adaptive Q (Bryson's rule), iLQR with CARE terminal cost, Halton quasi-random ROA, relative singularity tolerance, NaN detection, input validation, 50 tests passing. See [Changelog](#changelog) for full history.
 
 ## Quick Start
 
@@ -137,9 +137,11 @@ simulation:
   seed: 42             # Random seed
 
 features:
-  use_ilqr: false      # Enable iLQR trajectory optimization
-  ilqr_horizon: 500    # iLQR planning horizon steps
-  ilqr_iterations: 10  # iLQR iteration count
+  use_ilqr: false           # Enable iLQR trajectory optimization
+  ilqr_horizon: 500         # iLQR planning horizon steps
+  ilqr_iterations: 10       # iLQR iteration count
+  gain_scheduler: "1d"      # "1d" (cubic Hermite) or "3d" (trilinear 7×5×5)
+  adaptive_q: false         # Use inertia-scaled Q matrix (Bryson's rule)
 ```
 
 **Priority**: CLI flags override YAML values, which override built-in defaults.
@@ -331,34 +333,24 @@ $$K = R^{-1} B^T P, \qquad u = -K \mathbf{z}$$
 | θ̇₁, θ̇₂, θ̇₃ | 10 | Moderate damping |
 | R (control weight) | 0.01 | Permits aggressive actuation |
 
-#### 3.4 Analytical Jacobians
+#### 3.4 Linearization: Analytical + Numerical Hybrid
 
-The linearization Jacobians A<sub>q</sub> and B<sub>u</sub> are computed using **true analytical derivatives** of the equations of motion. At the equilibrium (q̇ = 0), the Coriolis term vanishes, so:
+The linearization computes A (8×8) and B (8×1) using a **hybrid analytical/numerical** approach with automatic fallback:
+
+**Primary (analytical):** A<sub>q</sub> and B<sub>u</sub> are computed using **true closed-form derivatives**. At the equilibrium (q̇ = 0), the Coriolis term vanishes, so:
 
 $$\ddot{\mathbf{q}} = M(\mathbf{q})^{-1} \left[ \boldsymbol{\tau} - G(\mathbf{q}) \right]$$
 
-The position Jacobian is:
+$$A_q = \frac{\partial \ddot{\mathbf{q}}}{\partial \mathbf{q}} = -M^{-1} \frac{\partial G}{\partial \mathbf{q}} - M^{-1} \frac{\partial M}{\partial \mathbf{q}} M^{-1} \left( \boldsymbol{\tau} - G \right), \qquad B_u = M^{-1} \begin{bmatrix} 1 \\ 0 \\ 0 \\ 0 \end{bmatrix}$$
 
-$$A_q = \frac{\partial \ddot{\mathbf{q}}}{\partial \mathbf{q}} = -M^{-1} \frac{\partial G}{\partial \mathbf{q}} - M^{-1} \frac{\partial M}{\partial \mathbf{q}} M^{-1} \left( \boldsymbol{\tau} - G \right)$$
+using the matrix derivative identity dM<sup>-1</sup>/dq<sub>k</sub> = -M<sup>-1</sup> (dM/dq<sub>k</sub>) M<sup>-1</sup>. Both dG/dq and dM/dq<sub>k</sub> are computed in closed form (Section 2.4). The velocity Jacobian A<sub>q̇</sub> is computed via adaptive central differences since the full analytical Christoffel Jacobian is complex and the numerical approach is efficient (each forward_dynamics call is O(1) via JIT).
 
-using the matrix derivative identity dM<sup>-1</sup>/dq<sub>k</sub> = -M<sup>-1</sup> (dM/dq<sub>k</sub>) M<sup>-1</sup>. The input Jacobian is simply:
+**Fallback (numerical):** If the analytical path fails (e.g., singular M), the code automatically falls back to a fully JIT-compiled finite-difference Jacobian with adaptive step size h<sub>j</sub> = ε<sub>mach</sub><sup>1/3</sup> · max(1, |x<sub>j</sub>|), providing O(ε<sup>2/3</sup>) accuracy. A warning is logged on fallback.
 
-$$B_u = M^{-1} \begin{bmatrix} 1 \\ 0 \\ 0 \\ 0 \end{bmatrix}$$
-
-Both dG/dq and dM/dq<sub>k</sub> are computed in closed form (Section 2.4). The velocity Jacobian A<sub>q̇</sub> is computed via optimized numerical differences since the full analytical expression requires all Christoffel symbols, and the contribution is typically small at equilibrium.
-
-This hybrid approach provides:
+This provides:
 - **Exact A<sub>q</sub> and B<sub>u</sub>** to machine precision (no truncation error)
-- **~190x speedup** over the Python-loop numerical Jacobian (0.001 s vs 0.19 s)
-- All derivatives compiled via `@njit(cache=True)`
-
-#### 3.5 Adaptive Numerical Jacobians (Fallback)
-
-The numerical fallback computes Jacobians via central finite differences with **adaptive step size**:
-
-$$h_j = \epsilon_{\text{mach}}^{1/3} \cdot \max(1, |q_j^*|)$$
-
-where ε<sub>mach</sub> ≈ 2.2 × 10⁻¹⁶ is machine epsilon. This yields h ≈ 6.1 × 10⁻⁶ for unit-scale variables and h ≈ 1.9 × 10⁻⁵ for θ₁ = π. For central differences, the truncation error is O(h²) and the roundoff error is O(ε/h); balancing these gives the optimal step h ≈ ε<sup>1/3</sup>, which is larger than the ε<sup>1/2</sup> optimum for forward differences.
+- **~190× speedup** over the Python-loop numerical Jacobian (0.001 s vs 0.19 s)
+- Graceful degradation with logged fallback on numerical issues
 
 #### 3.6 Gain Scheduling
 
@@ -760,7 +752,7 @@ Triple-Pendulum-LQR/
 │   │   ├── pendulum_block.py           # 3×3 inertia sub-matrix
 │   │   └── assembly.py                 # 4×4 symmetric M assembly
 │   ├── coriolis/
-│   │   └── christoffel.py              # Christoffel symbols via central differences
+│   │   └── christoffel.py              # Analytical Christoffel symbols (sparse closed-form)
 │   ├── gravity/
 │   │   └── gravity_vector.py           # G(q) computation
 │   └── forward_dynamics/
@@ -839,7 +831,7 @@ Triple-Pendulum-LQR/
 └── README.md
 ```
 
-**~80 source files** organized into 11 domain packages.
+**113 source files** organized into 11 domain packages.
 
 ---
 
@@ -863,11 +855,11 @@ pytest --cov=. --cov-report=term-missing
 
 | Test Module | Coverage |
 |-------------|----------|
-| `test_parameters.py` | SystemConfig construction, derived constants (α, β, γ), flat array packing |
-| `test_dynamics.py` | Mass matrix symmetry and positive-definiteness, Coriolis at equilibrium, gravity vector, forward dynamics consistency |
-| `test_linearization.py` | Analytical vs numerical Jacobian agreement, state-space dimensions, controllability |
-| `test_lqr.py` | CARE solution existence, P positive-definite, gain dimensions, closed-loop stability |
-| `test_simulation.py` | RK4 step energy conservation, disturbance generation, time loop convergence |
+| `test_parameters.py` | SystemConfig construction, validation (negative mass, zero length), derived constants, flat array packing, extreme parameters (heavy cart, light links, unequal lengths) |
+| `test_dynamics.py` | Mass matrix symmetry/positive-definiteness, Coriolis at rest, gravity at stable/unstable equilibria, array vs scalar dynamics consistency (6 configurations), RK4 single-step bounds, multi-step energy conservation (100 steps) |
+| `test_linearization.py` | Analytical vs numerical Jacobian agreement (rtol=1e-6), state-space dimensions, top-right identity block, open-loop instability, controllability rank |
+| `test_lqr.py` | CARE solution (P>0, symmetry, Riccati residual), gain K=R⁻¹B'P, closed-loop pole margin (Re < -0.1), Kalman return difference, gain scheduler creation/interpolation/packing |
+| `test_simulation.py` | Output shapes, stability under impulse, NaN absence, actuator saturation, impulse response, disturbance RMS, gain-scheduled vs fixed-gain simulation, ROA estimation |
 
 Install test dependencies:
 
@@ -886,6 +878,19 @@ python prebuild_cache.py
 ```
 
 This triggers compilation of all `@njit(cache=True)` functions and stores the compiled artifacts in `__pycache__/` directories. Subsequent runs load from cache with zero compilation overhead.
+
+---
+
+## Changelog
+
+| Version | Summary |
+|---------|---------|
+| **v2.4** | Final robustness polish: relative singularity tolerance, RK45 attempt guard, iLQR CARE terminal cost, CLI validation (dt>0, u_max>=0), adaptive Jacobian step, pole margin tests, energy conservation tests |
+| **v2.3** | All features pipeline-connected: `--gain-scheduler 3d`, `--adaptive-q`, zero dead code |
+| **v2.2** | GainScheduler passed to simulate(), YAML CLI override fix, iLQR wired, NaN detection |
+| **v2.1** | CARE controllability validation, Q/R checks, mass matrix singularity guard, ROA fast scalar kernel (3x), Halton quasi-random, ProcessPoolExecutor, iLQR matrix exponential, 3D GS grid 175pt, Bryson PD, parameter packing docs |
+| **v2.0** | Major rewrite: pytest suite, pyproject.toml, analytical Jacobians, RK45 integrator, multi-axis gain scheduling, iLQR, adaptive ROA (Wilson CI), CLI (argparse), YAML config, logging module, comparison plots, JIT prebuild |
+| **v1.0** | Initial release: Lagrangian dynamics, LQR control, zero-allocation JIT simulation, frequency analysis, ROA estimation, publication-quality visualization |
 
 ---
 
