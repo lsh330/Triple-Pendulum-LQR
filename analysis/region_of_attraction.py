@@ -1,6 +1,9 @@
 """Region of Attraction (ROA) estimation via Monte Carlo simulation.
 
 Uses a single @njit function with parallel prange for maximum speed.
+The legacy _run_loop is used here because parallel=True compilation of the
+monolithic fast loop is prohibitively slow. Since ROA runs many short
+simulations, the per-call overhead is less critical than compilation time.
 """
 
 import numpy as np

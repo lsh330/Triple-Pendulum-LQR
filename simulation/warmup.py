@@ -10,20 +10,28 @@ def warmup_jit():
     q = cfg.equilibrium
     dq = np.zeros(4)
 
-    # Trigger all dynamics JIT functions
+    # Trigger legacy dynamics (needed for ROA parallel, linearization, etc.)
     from dynamics.forward_dynamics.forward_dynamics import forward_dynamics
     forward_dynamics(q, dq, 0.0, p)
 
-    # Trigger simulation JIT functions
     from simulation.integrator.rk4_step import rk4_step
     rk4_step(q, dq, 0.0, p, 0.001)
 
     from simulation.loop.control_law import compute_control
     compute_control(q, dq, q, np.zeros(8))
 
-    # Trigger gain-scheduled loop
+    # Trigger legacy loops (used by ROA parallel)
     from simulation.loop.time_loop import _run_loop, _run_loop_gs, _interp_gain_njit
     _run_loop(3, 0.001, q, dq, q, np.zeros(8), p, np.empty(0))
     dev = np.array([-0.35, 0.0, 0.35])
     Ks = np.zeros((3, 8))
     _run_loop_gs(3, 0.001, q, dq, q, p, np.empty(0), dev, Ks)
+
+    # Trigger fast dynamics and loops (used by main simulation)
+    from dynamics.forward_dynamics.forward_dynamics_fast import forward_dynamics_fast, rk4_step_fast
+    forward_dynamics_fast(q[0], q[1], q[2], q[3], 0.0, 0.0, 0.0, 0.0, 0.0, p)
+    rk4_step_fast(q[0], q[1], q[2], q[3], 0.0, 0.0, 0.0, 0.0, 0.0, p, 0.001)
+
+    from simulation.loop.time_loop_fast import _run_loop_fast, _run_loop_gs_fast
+    _run_loop_fast(3, 0.001, q, dq, q, np.zeros(8), p, np.empty(0), 1e30)
+    _run_loop_gs_fast(3, 0.001, q, dq, q, p, np.empty(0), dev, Ks, 1e30)

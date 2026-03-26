@@ -139,6 +139,8 @@ def simulate(cfg, K, t_end=10.0, dt=0.001, impulse=0.0, disturbance=None,
              gain_scheduler=None, u_max=1e30):
     """Run a closed-loop simulation of the cart + triple pendulum.
 
+    Uses zero-allocation scalar-state RK4 loop for maximum performance.
+
     Parameters
     ----------
     cfg : SystemConfig
@@ -153,6 +155,8 @@ def simulate(cfg, K, t_end=10.0, dt=0.001, impulse=0.0, disturbance=None,
     u_max : float
         Symmetric actuator force saturation limit (N). Default 1e30 (no limit).
     """
+    from simulation.loop.time_loop_fast import _run_loop_fast, _run_loop_gs_fast
+
     p = cfg.pack()
     q_eq = cfg.equilibrium
     K_flat = K.flatten()
@@ -179,19 +183,20 @@ def simulate(cfg, K, t_end=10.0, dt=0.001, impulse=0.0, disturbance=None,
 
         # Warmup JIT
         if N > 3:
-            _run_loop_gs(3, dt, q0, dq0, q_eq, p,
-                         dist_arr[:3] if dist_arr.shape[0] >= 3 else np.empty(0),
-                         gs_dev, gs_K)
+            _run_loop_gs_fast(3, dt, q0, dq0, q_eq, p,
+                              dist_arr[:3] if dist_arr.shape[0] >= 3 else np.empty(0),
+                              gs_dev, gs_K, u_max)
 
-        q_arr, dq_arr, u_ctrl_arr, u_dist_arr = _run_loop_gs(
+        q_arr, dq_arr, u_ctrl_arr, u_dist_arr = _run_loop_gs_fast(
             N, dt, q0, dq0, q_eq, p, dist_arr, gs_dev, gs_K, u_max
         )
     else:
         # Warmup JIT (first call compiles)
         if N > 3:
-            _run_loop(3, dt, q0, dq0, q_eq, K_flat, p, dist_arr[:3] if dist_arr.shape[0] >= 3 else np.empty(0))
+            _run_loop_fast(3, dt, q0, dq0, q_eq, K_flat, p,
+                           dist_arr[:3] if dist_arr.shape[0] >= 3 else np.empty(0), u_max)
 
-        q_arr, dq_arr, u_ctrl_arr, u_dist_arr = _run_loop(
+        q_arr, dq_arr, u_ctrl_arr, u_dist_arr = _run_loop_fast(
             N, dt, q0, dq0, q_eq, K_flat, p, dist_arr, u_max
         )
 

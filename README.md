@@ -351,14 +351,21 @@ All dynamics functions (M, C, G, forward dynamics) and the entire simulation loo
 | Gain scheduling | N/A | @njit interpolation | 0 overhead |
 | LQR linearization | 3 Python-loop Jacobians (0.19s) | Single @njit Jacobian (0.001s) | **~190×** |
 | JIT warmup | Lazy (first call penalty) | Explicit warmup_jit() at startup | Predictable |
+| Trig computation | 3× per forward_dynamics (27 calls) | 1× monolithic (9 calls) | **~3×** |
+| Array allocation | ~38 per RK4 step (heap) | 0 per step (all scalars) | **~2.7×** |
+| State packing | 8-vector pack/unpack per step | Direct scalar propagation | **0 overhead** |
+| Control law | Array z construction + dot product | Inline scalar multiply-add | **0 allocation** |
+| Angle wrapping | None (drift-prone) | Per-step atan2-free wrap in control | **negligible** |
 
-**Combined result**: forward_dynamics call takes **0.9 μs**. A 5-second simulation (5,001 steps) completes in **9.2 ms**. LQR design completes in **1 ms** (cached).
+The simulation hot path (`forward_dynamics_fast` + `rk4_step_fast`) uses **zero heap allocation** per timestep. All state variables, mass matrix elements, Coriolis terms, and RHS values are scalar locals. The cofactor 4×4 solve is inlined. This eliminates ~570,000 small array allocations over a 15-second simulation.
+
+**Combined result**: A 15-second simulation (15,001 steps) completes in **~15 ms**. LQR design completes in **1 ms** (cached).
 
 | Pipeline Stage | Method | Time |
 |---------------|--------|------|
 | JIT warmup | Pre-compile all @njit functions | ~2.8 s (one-time) |
 | LQR design | @njit Jacobian + scipy CARE | **~0.001 s** (cached) |
-| Simulation (5s, dt=0.001) | Sparse analytical Coriolis + Cramer + JIT loop | **~0.009 s** |
+| Simulation (15s, dt=0.001) | Zero-alloc scalar RK4 + monolithic dynamics | **~0.015 s** |
 | Monte Carlo (20 samples) | ThreadPool parallel | ~0.03 s |
 | ROA estimation (500 samples) | JIT simulation per sample | ~5 s |
 | Frequency analysis | scipy.signal | ~0.005 s |
@@ -566,7 +573,8 @@ Triple-Pendulum-LQR/
 │   └── forward_dynamics/
 │       ├── tau_assembly.py              # Input mapping τ = (F, 0, 0, 0)
 │       ├── solve_acceleration.py        # M⁻¹ · rhs
-│       └── forward_dynamics.py          # Full q̈ = M⁻¹(τ − Cq̇ − G)
+│       ├── forward_dynamics.py          # Full q̈ = M⁻¹(τ − Cq̇ − G)
+│       └── forward_dynamics_fast.py     # Zero-alloc monolithic scalar dynamics + RK4
 │
 ├── control/
 │   ├── linearization/
@@ -603,7 +611,8 @@ Triple-Pendulum-LQR/
 │   │   └── impulse_response.py         # Solve M·Δq̇ = (impulse, 0, 0, 0)ᵀ
 │   └── loop/
 │       ├── control_law.py              # u = −Kz — @njit
-│       └── time_loop.py                # Main simulation loop
+│       ├── time_loop.py                # Simulation loop (legacy + fast dispatch)
+│       └── time_loop_fast.py           # Zero-alloc scalar-state simulation loops
 │
 ├── analysis/
 │   ├── state/                           # Absolute angles, joint positions, deviations
