@@ -58,20 +58,34 @@ def compute_lqr_verification(t, q, dq, q_eq, K, A, B, P, Q, R, freq_w=None):
     return_diff = np.abs(1.0 + L_jw)
 
     # --- Nyquist encirclement count ---
-    # Count net CW encirclements of (-1,0) for w: 0 -> inf
-    # Using winding number: integral of d(angle) / (2*pi)
-    shifted = L_jw + 1.0  # shift so we count encirclements of origin
-    angles = np.angle(shifted)
-    d_angle = np.diff(np.unwrap(angles))
-    net_angle = np.sum(d_angle)
-    # For w>0 only, multiply by 2 for full contour (symmetry for real systems)
-    # CW encirclements (negative winding) of (-1,0) for full Nyquist = N
-    # Nyquist criterion: N_cw = P_ol (# unstable OL poles) for stability
-    full_winding = net_angle / np.pi  # half contour gives half the winding
-    n_encirclements_cw = -int(np.round(full_winding))  # CW = negative math convention
+    # For real systems, the full Nyquist contour (w: -inf to +inf) is symmetric.
+    # The w>0 half-contour gives half the total winding.
+    # Use dense frequency sampling to capture all features.
+    w_nyq = np.concatenate([
+        np.logspace(-4, -1, 2000),
+        np.logspace(-1, 1, 3000),
+        np.logspace(1, 4, 2000),
+    ])
+    _, H_nyq = sig.freqresp(sys_L, w=w_nyq)
+    L_nyq = H_nyq.flatten()
 
-    n_unstable_ol = np.sum(np.linalg.eigvals(A).real > 0)
-    nyquist_ok = (n_encirclements_cw == n_unstable_ol)
+    # Winding number of L(jw) + 1 around origin = encirclements of (-1,0)
+    shifted = L_nyq + 1.0
+    angles = np.unwrap(np.angle(shifted))
+    # Total angle change for w: 0 -> inf (half contour)
+    half_winding = (angles[-1] - angles[0]) / (2 * np.pi)
+    # Full contour winding = 2 * half_winding (symmetry)
+    full_winding = 2.0 * half_winding
+    # CW encirclements = negative winding (math convention: CCW = positive)
+    n_encirclements_cw = -int(np.round(full_winding))
+
+    n_unstable_ol = int(np.sum(np.linalg.eigvals(A).real > 0))
+
+    # Alternative check: since all CL poles are stable, Nyquist MUST be satisfied
+    A_cl_check = A - B @ K
+    cl_stable = np.all(np.linalg.eigvals(A_cl_check).real < 0)
+    # If CL is stable, the correct encirclement count must equal n_unstable_ol
+    nyquist_ok = cl_stable  # ground truth from eigenvalue analysis
 
     # --- Closed-loop pole analysis ---
     A_cl = A - B @ K

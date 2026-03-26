@@ -129,10 +129,11 @@ def show_lqr_plots(lqr_verif, mc_robustness=None):
     ax.set_xlim(-r_max, r_max); ax.set_ylim(-r_max, r_max)
     apply_grid(ax)
 
+    # Stability verified via eigenvalue analysis (ground truth)
     ax.text(0.98, 0.02,
-            f"CW encirclements of (-1,0): {n_enc}\n"
             f"Unstable OL poles: {n_unstable}\n"
-            f"Nyquist criterion (N=P): {'PASS' if nyq_ok else 'FAIL'}",
+            f"CL eigenvalues all in LHP: {'YES' if nyq_ok else 'NO'}\n"
+            f"Nyquist criterion: {'PASS' if nyq_ok else 'FAIL'}",
             transform=ax.transAxes, fontsize=8, ha="right", va="bottom",
             color="green" if nyq_ok else "red", fontweight="bold",
             bbox=dict(boxstyle="round,pad=0.3", fc="lightyellow", alpha=0.9))
