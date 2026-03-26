@@ -17,7 +17,15 @@ from control.gain_computation.compute_K import compute_K
 
 
 def _compute_gain_at(cfg, q_offset, Q=None, R=None):
-    """Compute LQR gain at equilibrium + offset."""
+    """Compute LQR gain at equilibrium + offset.
+
+    NOTE: The offset operating points are NOT true equilibria — at these
+    configurations with dq=0 and u=0, gravity produces nonzero torques.
+    This is a heuristic local gain bank that works well for small deviations
+    from the true upright equilibrium. The linearization accounts for the
+    gravity gradient (dG/dq) at the offset point, which provides reasonable
+    local stabilization despite the theoretical limitation.
+    """
     p = cfg.pack()
     q_op = cfg.equilibrium.copy()
     q_op[1:4] += q_offset[:3]
@@ -35,6 +43,11 @@ class GainScheduler:
 
     Precomputes LQR gains at multiple theta1 deviations and interpolates
     at runtime using monotone piecewise cubic Hermite (PCHIP-like) spline.
+
+    Warning: Operating points are heuristic perturbations of the upright
+    equilibrium, NOT true equilibria. The gravity torque is nonzero at
+    these points. For rigorous gain scheduling, a trim solver that finds
+    u_eq(q) satisfying M*0 + G(q) = B*u_eq would be needed.
     """
 
     def __init__(self, cfg, deviation_angles_deg=None):
@@ -133,11 +146,11 @@ class MultiAxisGainScheduler:
     def __init__(self, cfg,
                  theta1_deg=None, theta2_deg=None, theta3_deg=None):
         if theta1_deg is None:
-            theta1_deg = [-15, -5, 0, 5, 15]
+            theta1_deg = [-20, -12, -5, 0, 5, 12, 20]
         if theta2_deg is None:
-            theta2_deg = [-8, 0, 8]
+            theta2_deg = [-10, -4, 0, 4, 10]
         if theta3_deg is None:
-            theta3_deg = [-5, 0, 5]
+            theta3_deg = [-6, -2, 0, 2, 6]
 
         self.cfg = cfg
         Q = default_Q()

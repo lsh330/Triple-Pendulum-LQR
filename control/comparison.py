@@ -9,34 +9,33 @@ from scipy import signal
 
 
 def compute_pid_gains(A, B, K_lqr):
-    """Design a PID-like state feedback controller.
+    """Design a PD state feedback controller using Bryson's rule.
 
-    For the underactuated system (4 DOF, 1 input), a full PID is not
-    directly applicable. Instead, we design a proportional-derivative (PD)
-    controller on the angle errors, tuned to match LQR bandwidth.
+    Scales gains by the inverse of acceptable state deviations, providing
+    a principled (though suboptimal) alternative to LQR.
 
     Returns K_pid (1, 8) gain matrix.
     """
-    # PD gains: proportional on angles, derivative on angular velocities
-    # Tuned heuristically to match LQR's gain crossover frequency
     K_pid = np.zeros((1, 8))
 
-    # Use LQR gains as reference scale
-    k_scale = np.abs(K_lqr.flatten()).mean()
+    # Bryson's rule: Q_ii = 1/max_acceptable_deviation_i^2
+    # Cart: ±0.5m, angles: ±10deg, velocities: ±2 m/s or rad/s
+    max_dev = np.array([0.5, np.radians(10), np.radians(10), np.radians(10),
+                        2.0, np.radians(50), np.radians(50), np.radians(50)])
+    Q_bryson = np.diag(1.0 / max_dev**2)
+    R_bryson = np.array([[1.0 / 200.0**2]])  # max force 200N
 
-    # Proportional gains (position/angle)
-    K_pid[0, 0] = k_scale * 0.3    # cart position
-    K_pid[0, 1] = k_scale * 3.0    # theta1 (most critical)
-    K_pid[0, 2] = k_scale * 2.5    # theta2
-    K_pid[0, 3] = k_scale * 2.0    # theta3
+    try:
+        from control.riccati.solve_care import solve_riccati
+        from control.gain_computation.compute_K import compute_K
+        B_col = B.reshape(-1, 1) if B.ndim == 1 else B
+        P = solve_riccati(A, B_col, Q_bryson, R_bryson)
+        K_pid = compute_K(R_bryson, B_col, P)
+    except Exception:
+        # Fallback: scale from LQR
+        K_pid = K_lqr * 0.5
 
-    # Derivative gains (velocity)
-    K_pid[0, 4] = k_scale * 0.1    # cart velocity
-    K_pid[0, 5] = k_scale * 0.8    # dtheta1
-    K_pid[0, 6] = k_scale * 0.6    # dtheta2
-    K_pid[0, 7] = k_scale * 0.5    # dtheta3
-
-    return K_pid
+    return K_pid.reshape(1, 8)
 
 
 def compute_pole_placement_gains(A, B):

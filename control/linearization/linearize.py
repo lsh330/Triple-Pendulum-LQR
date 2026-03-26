@@ -30,8 +30,9 @@ def linearize(q_eq, p, eps=None, method="analytical"):
         try:
             A, B = compute_analytical_jacobians(q_eq, p)
             return A, B
-        except Exception:
-            pass
+        except (np.linalg.LinAlgError, ValueError) as e:
+            from utils.logger import get_logger
+            get_logger().warning("Analytical Jacobian failed (%s), falling back to numerical", e)
 
     # Fallback: JIT numerical Jacobians
     dq_eq = np.zeros(4)

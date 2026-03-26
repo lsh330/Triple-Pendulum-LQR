@@ -8,59 +8,105 @@ simulations, the per-call overhead is less critical than compilation time.
 
 import numpy as np
 from numba import njit, prange
-from simulation.loop.time_loop import _run_loop
+from dynamics.forward_dynamics.forward_dynamics_fast import forward_dynamics_fast, rk4_step_fast
+
+
+@njit(cache=True)
+def _angle_wrap(dx):
+    while dx > np.pi:
+        dx -= 2.0 * np.pi
+    while dx < -np.pi:
+        dx += 2.0 * np.pi
+    return dx
 
 
 @njit(cache=True, parallel=True)
 def _roa_batch(n_samples, N, dt, q_eq, K_flat, p,
                theta1_devs, theta2_devs, theta3_devs, conv_threshold,
                u_max=1e30, cart_limit=2.0, angle_limit=1.5708):
-    """Run all ROA simulations in parallel using Numba prange."""
+    """Run ROA simulations in parallel using fast scalar dynamics."""
     converged = np.zeros(n_samples, dtype=np.bool_)
-    dist_arr = np.empty(0)
+    eq0 = q_eq[0]; eq1 = q_eq[1]; eq2 = q_eq[2]; eq3 = q_eq[3]
 
     for i in prange(n_samples):
-        q0 = q_eq.copy()
-        q0[1] += theta1_devs[i]
-        q0[2] += theta2_devs[i]
-        q0[3] += theta3_devs[i]
-        dq0 = np.zeros(4)
+        sq0 = q_eq[0]
+        sq1 = q_eq[1] + theta1_devs[i]
+        sq2 = q_eq[2] + theta2_devs[i]
+        sq3 = q_eq[3] + theta3_devs[i]
+        sdq0 = 0.0; sdq1 = 0.0; sdq2 = 0.0; sdq3 = 0.0
 
-        q_arr, dq_arr, _, _ = _run_loop(N, dt, q0, dq0, q_eq, K_flat, p,
-                                         dist_arr, u_max)
-
-        # Trajectory boundedness check (early exit on divergence)
         failed = False
-        for k in range(N):
-            if np.isnan(q_arr[k, 0]):
+        for k in range(N - 1):
+            # Control law (inline, scalar)
+            z0 = sq0 - eq0
+            z1 = _angle_wrap(sq1 - eq1)
+            z2 = _angle_wrap(sq2 - eq2)
+            z3 = _angle_wrap(sq3 - eq3)
+            u_c = -(K_flat[0]*z0 + K_flat[1]*z1 + K_flat[2]*z2 + K_flat[3]*z3
+                   + K_flat[4]*sdq0 + K_flat[5]*sdq1 + K_flat[6]*sdq2 + K_flat[7]*sdq3)
+            if u_c > u_max:
+                u_c = u_max
+            elif u_c < -u_max:
+                u_c = -u_max
+
+            # RK4 step (fast scalar)
+            sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3 = rk4_step_fast(
+                sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3, u_c, p, dt)
+
+            # Boundedness check
+            if sq0 != sq0:  # NaN check
                 failed = True
                 break
-            if abs(q_arr[k, 0] - q_eq[0]) > cart_limit:
+            if abs(sq0 - eq0) > cart_limit:
                 failed = True
                 break
-            for j in range(1, 4):
-                if np.isnan(q_arr[k, j]):
-                    failed = True
-                    break
-                if abs(q_arr[k, j] - q_eq[j]) > angle_limit:
-                    failed = True
-                    break
-            if failed:
+            if abs(_angle_wrap(sq1 - eq1)) > angle_limit:
+                failed = True
+                break
+            if abs(_angle_wrap(sq2 - eq2)) > angle_limit:
+                failed = True
+                break
+            if abs(_angle_wrap(sq3 - eq3)) > angle_limit:
+                failed = True
                 break
 
         if failed:
             continue
 
-        # Check convergence at final timestep
-        max_dev = 0.0
-        for j in range(1, 4):
-            dev = abs(q_arr[N - 1, j] - q_eq[j])
-            if dev > max_dev:
-                max_dev = dev
+        # Convergence check
+        max_dev = abs(_angle_wrap(sq1 - eq1))
+        d2 = abs(_angle_wrap(sq2 - eq2))
+        d3 = abs(_angle_wrap(sq3 - eq3))
+        if d2 > max_dev:
+            max_dev = d2
+        if d3 > max_dev:
+            max_dev = d3
         if max_dev < conv_threshold:
             converged[i] = True
 
     return converged
+
+
+def _halton_sequence(n_samples, dim, seed=0):
+    """Generate Halton quasi-random sequence in [0,1]^dim.
+
+    Low-discrepancy sequence with O(log(N)^d / N) convergence
+    vs O(1/sqrt(N)) for pseudo-random — requires ~30% fewer samples.
+    """
+    primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29][:dim]
+    result = np.empty((n_samples, dim))
+    for d in range(dim):
+        base = primes[d]
+        for i in range(n_samples):
+            n = i + 1 + seed
+            f = 1.0
+            r = 0.0
+            while n > 0:
+                f /= base
+                r += f * (n % base)
+                n //= base
+            result[i, d] = r
+    return result
 
 
 def estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, dt=0.001,
@@ -81,10 +127,10 @@ def estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, dt=0.001,
     N = int(np.ceil(t_horizon / dt)) + 1
     conv_threshold = np.deg2rad(1.0)
 
-    all_theta1 = np.empty(0)
-    all_theta2 = np.empty(0)
-    all_theta3 = np.empty(0)
-    all_converged = np.empty(0, dtype=np.bool_)
+    all_theta1 = np.empty(max_samples)
+    all_theta2 = np.empty(max_samples)
+    all_theta3 = np.empty(max_samples)
+    all_converged = np.empty(max_samples, dtype=np.bool_)
 
     # Warmup
     warmup_t1 = rng.uniform(-max_angle_rad, max_angle_rad, 2)
@@ -98,18 +144,19 @@ def estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, dt=0.001,
         current_batch = min(batch_size if total_samples > 0 else n_samples,
                            max_samples - total_samples)
 
-        theta1_devs = rng.uniform(-max_angle_rad, max_angle_rad, current_batch)
-        theta2_devs = rng.uniform(-max_angle_rad / 2, max_angle_rad / 2, current_batch)
-        theta3_devs = rng.uniform(-max_angle_rad / 3, max_angle_rad / 3, current_batch)
+        halton = _halton_sequence(current_batch, 3, seed=total_samples)
+        theta1_devs = (halton[:, 0] * 2 - 1) * max_angle_rad
+        theta2_devs = (halton[:, 1] * 2 - 1) * max_angle_rad / 2
+        theta3_devs = (halton[:, 2] * 2 - 1) * max_angle_rad / 3
 
         converged = _roa_batch(current_batch, N, dt, q_eq, K_flat, p,
                                theta1_devs, theta2_devs, theta3_devs,
                                conv_threshold)
 
-        all_theta1 = np.concatenate([all_theta1, theta1_devs])
-        all_theta2 = np.concatenate([all_theta2, theta2_devs])
-        all_theta3 = np.concatenate([all_theta3, theta3_devs])
-        all_converged = np.concatenate([all_converged, converged])
+        all_theta1[total_samples:total_samples + current_batch] = theta1_devs
+        all_theta2[total_samples:total_samples + current_batch] = theta2_devs
+        all_theta3[total_samples:total_samples + current_batch] = theta3_devs
+        all_converged[total_samples:total_samples + current_batch] = converged
         total_samples += current_batch
 
         # Check convergence of estimate
@@ -124,6 +171,11 @@ def estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, dt=0.001,
 
         if total_samples >= n_samples and ci_width < convergence_ci_width:
             break
+
+    all_theta1 = all_theta1[:total_samples]
+    all_theta2 = all_theta2[:total_samples]
+    all_theta3 = all_theta3[:total_samples]
+    all_converged = all_converged[:total_samples]
 
     theta1_devs_deg = np.rad2deg(all_theta1)
     theta2_devs_deg = np.rad2deg(all_theta2)

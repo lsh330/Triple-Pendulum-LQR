@@ -34,3 +34,10 @@ def warmup_jit():
     from simulation.loop.time_loop_fast import _run_loop_fast, _run_loop_gs_fast
     _run_loop_fast(3, 0.001, q, dq, q, np.zeros(8), p, np.empty(0), 1e30)
     _run_loop_gs_fast(3, 0.001, q, dq, q, p, np.empty(0), dev, Ks, 1e30)
+
+    # Trigger ROA fast kernel (uses rk4_step_fast directly)
+    from analysis.region_of_attraction import _roa_batch
+    t1 = np.array([0.01, -0.01])
+    t2 = np.array([0.0, 0.0])
+    t3 = np.array([0.0, 0.0])
+    _roa_batch(2, 5, 0.001, q, np.zeros(8), p, t1, t2, t3, 0.017)

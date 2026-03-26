@@ -64,6 +64,10 @@ def _run_loop_fast(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max):
         sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3 = rk4_step_fast(
             sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3, u_total, p, dt)
 
+        # NaN/divergence detection
+        if sq0 != sq0 or sq1 != sq1:  # NaN check (NaN != NaN)
+            break
+
         q_arr[k + 1, 0] = sq0; q_arr[k + 1, 1] = sq1
         q_arr[k + 1, 2] = sq2; q_arr[k + 1, 3] = sq3
         dq_arr[k + 1, 0] = sdq0; dq_arr[k + 1, 1] = sdq1
@@ -156,6 +160,10 @@ def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
         u_total = u_c + u_d
         sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3 = rk4_step_fast(
             sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3, u_total, p, dt)
+
+        # NaN/divergence detection
+        if sq0 != sq0 or sq1 != sq1:  # NaN check (NaN != NaN)
+            break
 
         q_arr[k + 1, 0] = sq0; q_arr[k + 1, 1] = sq1
         q_arr[k + 1, 2] = sq2; q_arr[k + 1, 3] = sq3

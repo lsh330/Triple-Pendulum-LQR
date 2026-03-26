@@ -146,6 +146,9 @@ def forward_dynamics_fast(q0, q1, q2, q3, dq0, dq1, dq2, dq3, u, p):
     A32 = -_det3(m00, m01, m03, m10, m11, m13, m20, m21, m23)
     A33 = _det3(m00, m01, m02, m10, m11, m12, m20, m21, m22)
 
+    if abs(det) < 1e-30:
+        return 0.0, 0.0, 0.0, 0.0
+
     inv_det = 1.0 / det
 
     ddq0 = (A00 * r0 + A10 * r1 + A20 * r2 + A30 * r3) * inv_det

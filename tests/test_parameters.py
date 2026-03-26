@@ -38,3 +38,31 @@ class TestSystemConfig:
         assert abs(q_eq[1] - np.pi) < 1e-14
         assert q_eq[2] == 0.0
         assert q_eq[3] == 0.0
+
+    def test_heavy_cart(self):
+        """Heavy cart should still produce valid LQR."""
+        cfg = SystemConfig(mc=100.0, m1=1.0, m2=1.0, m3=1.0,
+                          L1=0.5, L2=0.5, L3=0.5)
+        from control.lqr import compute_lqr_gains
+        K, A, B, P, Q, R = compute_lqr_gains(cfg)
+        from control.closed_loop import compute_closed_loop
+        cl = compute_closed_loop(A, B, K)
+        assert cl["is_stable"]
+
+    def test_light_links(self):
+        """Very light links should still work."""
+        cfg = SystemConfig(mc=2.0, m1=0.01, m2=0.01, m3=0.01,
+                          L1=0.5, L2=0.5, L3=0.5)
+        from control.lqr import compute_lqr_gains
+        K, _, _, _, _, _ = compute_lqr_gains(cfg)
+        assert K.shape == (1, 8)
+
+    def test_unequal_lengths(self):
+        """Very different link lengths."""
+        cfg = SystemConfig(mc=2.0, m1=1.0, m2=1.0, m3=1.0,
+                          L1=0.1, L2=0.5, L3=2.0)
+        from control.lqr import compute_lqr_gains
+        K, A, B, P, Q, R = compute_lqr_gains(cfg)
+        from control.closed_loop import compute_closed_loop
+        cl = compute_closed_loop(A, B, K)
+        assert cl["is_stable"]

@@ -54,15 +54,42 @@ def _build_parser():
 
 
 def _load_yaml_config(path):
-    """Load configuration from YAML file."""
+    """Load and validate configuration from YAML file."""
     try:
         import yaml
     except ImportError:
         print("ERROR: pyyaml required for --config. Install: pip install pyyaml")
         sys.exit(1)
 
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
+    try:
+        with open(path, "r") as f:
+            cfg = yaml.safe_load(f)
+    except FileNotFoundError:
+        print(f"ERROR: Config file not found: {path}")
+        sys.exit(1)
+    except yaml.YAMLError as e:
+        print(f"ERROR: Invalid YAML in {path}: {e}")
+        sys.exit(1)
+
+    if cfg is None:
+        return {}
+
+    # Validate known keys
+    valid_sections = {"system", "simulation", "features"}
+    for key in cfg:
+        if key not in valid_sections:
+            print(f"WARNING: Unknown config section '{key}' (expected: {valid_sections})")
+
+    # Validate numeric parameters are positive where required
+    sys_params = cfg.get("system", {})
+    for key in ["mc", "m1", "m2", "m3", "L1", "L2", "L3", "g"]:
+        if key in sys_params:
+            val = sys_params[key]
+            if not isinstance(val, (int, float)) or val <= 0:
+                print(f"ERROR: system.{key} must be a positive number, got {val}")
+                sys.exit(1)
+
+    return cfg
 
 
 def main(argv=None):

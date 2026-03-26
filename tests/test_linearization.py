@@ -30,7 +30,7 @@ class TestAnalyticalVsNumerical:
         A_ana, B_ana = compute_analytical_jacobians(q_eq, p)
         A_num, B_num = compute_jacobians_jit(q_eq, np.zeros(4), 0.0, p)
 
-        np.testing.assert_allclose(A_ana, A_num, atol=1e-4,
+        np.testing.assert_allclose(A_ana, A_num, rtol=1e-6, atol=1e-8,
                                    err_msg="Analytical and numerical A should agree")
 
     def test_B_matrices_agree(self, q_eq, p):
@@ -41,7 +41,7 @@ class TestAnalyticalVsNumerical:
         A_ana, B_ana = compute_analytical_jacobians(q_eq, p)
         A_num, B_num = compute_jacobians_jit(q_eq, np.zeros(4), 0.0, p)
 
-        np.testing.assert_allclose(B_ana, B_num, atol=1e-4,
+        np.testing.assert_allclose(B_ana, B_num, rtol=1e-6, atol=1e-8,
                                    err_msg="Analytical and numerical B should agree")
 
 

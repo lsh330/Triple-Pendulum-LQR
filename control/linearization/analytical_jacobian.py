@@ -224,7 +224,7 @@ def _compute_A_dq_numerical(q, p):
     A_dq = np.zeros((n, n))
 
     for j in range(n):
-        h = 6.06e-6  # sqrt(eps_mach)
+        h = 6.055e-6  # eps_mach^(1/3) — optimal for central differences O(h^2 + eps/h)
         dq_plus = dq_eq.copy()
         dq_minus = dq_eq.copy()
         dq_plus[j] += h

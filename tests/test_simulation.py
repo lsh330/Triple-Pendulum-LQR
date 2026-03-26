@@ -86,3 +86,14 @@ class TestDisturbance:
         d = generate_disturbance(t, amplitude=target_rms, bandwidth=3.0)
         actual_rms = np.sqrt(np.mean(d**2))
         assert abs(actual_rms - target_rms) < 1.0, f"RMS {actual_rms:.1f} != {target_rms}"
+
+
+class TestROA:
+    def test_roa_basic(self, cfg, K):
+        """ROA estimation should return valid results."""
+        from analysis.region_of_attraction import estimate_roa
+        roa = estimate_roa(cfg, K, n_samples=20, max_angle_deg=15,
+                          t_horizon=1.0, max_samples=20)
+        assert 0.0 <= roa['success_rate'] <= 1.0
+        assert roa['total_samples'] == 20
+        assert len(roa['converged']) == 20

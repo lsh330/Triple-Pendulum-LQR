@@ -61,11 +61,7 @@ def compute_lqr_verification(t, q, dq, q_eq, K, A, B, P, Q, R, freq_w=None):
     # For real systems, the full Nyquist contour (w: -inf to +inf) is symmetric.
     # The w>0 half-contour gives half the total winding.
     # Use dense frequency sampling to capture all features.
-    w_nyq = np.concatenate([
-        np.logspace(-4, -1, 2000),
-        np.logspace(-1, 1, 3000),
-        np.logspace(1, 4, 2000),
-    ])
+    w_nyq = np.logspace(-4, 4, 4000)
     _, H_nyq = sig.freqresp(sys_L, w=w_nyq)
     L_nyq = H_nyq.flatten()
 
@@ -134,12 +130,12 @@ def _mc_single_sample(cfg, scale_mc, scale_m1, scale_m2, scale_m3, freq_w):
         return None
 
 
-def compute_monte_carlo_robustness(cfg, n_samples=20, perturbation=0.10, seed=42):
+def compute_monte_carlo_robustness(cfg, n_samples=50, perturbation=0.10, seed=42):
     """Compute Monte Carlo Bode and pole data with +/-10% mass perturbation.
 
     Uses multiprocessing for parallel execution when available.
     """
-    rng = np.random.default_rng(seed)
+    rng = np.random.RandomState(seed)
     freq_w = np.logspace(-2, 3, 500)
 
     # Nominal
@@ -163,8 +159,8 @@ def compute_monte_carlo_robustness(cfg, n_samples=20, perturbation=0.10, seed=42
     mc_bode_mag = []
     mc_cl_poles = []
     try:
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=min(4, n_samples)) as pool:
+        from concurrent.futures import ProcessPoolExecutor
+        with ProcessPoolExecutor(max_workers=min(4, n_samples)) as pool:
             futures = [pool.submit(_mc_single_sample, cfg, *s, freq_w) for s in scales]
             for f in futures:
                 result = f.result()

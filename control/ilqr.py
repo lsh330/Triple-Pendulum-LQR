@@ -4,9 +4,9 @@ iLQR refines a trajectory by iteratively:
 1. Forward-simulating with the current control sequence
 2. Backward Riccati pass to compute time-varying LQR gains
 3. Forward pass with the updated gains
-4. Repeating until convergence
+4. Repeating until convergence (cost reduction < tolerance)
 
-This runs offline (not in the real-time JIT loop).
+Uses matrix exponential for accurate discretization (C4 fix).
 """
 
 import numpy as np
@@ -42,20 +42,32 @@ def _rk4_step(q, dq, u, p, dt):
 
 
 def _linearize_at(q, dq, u, p, dt):
-    """Linearize and discretize around (q, dq, u) using forward Euler on
-    the continuous-time Jacobians.
+    """Linearize and discretize around (q, dq, u) using matrix exponential.
+
+    Uses the exact discretization:
+        A_d = expm(A_c * dt)
+        B_d = A_c^{-1} (A_d - I) B_c  (or dt*B_c for small dt fallback)
 
     Returns discrete A_d (8x8) and B_d (8x1).
     """
+    from scipy.linalg import expm
+
     A_q = compute_A_q(q, dq, u, p, eps=None)
     A_dq = compute_A_dq(q, dq, u, p, eps=None)
     B_u = compute_B_u(q, dq, u, p, eps=None)
     A_c, B_c = assemble_state_space(A_q, A_dq, B_u)
 
-    # First-order discretization: A_d = I + dt*A_c, B_d = dt*B_c
     n = A_c.shape[0]
-    A_d = np.eye(n) + dt * A_c
-    B_d = dt * B_c
+    A_d = expm(A_c * dt)
+
+    # Exact B discretization via augmented matrix exponential
+    # [A_c B_c; 0 0] * dt -> expm gives [A_d, B_d_integrated; 0, I]
+    aug = np.zeros((n + 1, n + 1))
+    aug[:n, :n] = A_c * dt
+    aug[:n, n:] = B_c * dt
+    aug_exp = expm(aug)
+    B_d = aug_exp[:n, n:].copy()
+
     return A_d, B_d
 
 
@@ -92,11 +104,9 @@ def compute_ilqr_gains(cfg, q0, dq0, N_horizon=500, dt=0.001, n_iter=10):
     Q = default_Q()
     R = default_R()
 
-    # Get the standard LQR gain as warmstart
     K_lqr, _, _, _, _, _ = compute_lqr_gains(cfg)
     K_flat = K_lqr.flatten()
 
-    # Initialize control sequence using LQR policy
     x_traj = np.zeros((N_horizon, n_x))
     u_traj = np.zeros(N_horizon)
 
@@ -115,6 +125,9 @@ def compute_ilqr_gains(cfg, q0, dq0, N_horizon=500, dt=0.001, n_iter=10):
             q, dq = _rk4_step(q, dq, u_k, p, dt)
 
     # iLQR iterations
+    prev_cost = np.inf
+    converged = False
+
     for iteration in range(n_iter):
         # --- Backward pass: Riccati recursion ---
         K_seq = np.zeros((N_horizon, n_u, n_x))
@@ -127,22 +140,14 @@ def compute_ilqr_gains(cfg, q0, dq0, N_horizon=500, dt=0.001, n_iter=10):
 
             A_d, B_d = _linearize_at(qk, dqk, uk, p, dt)
 
-            # Riccati recursion (discrete-time)
-            # Q_xx = Q + A^T S A
-            # Q_uu = R + B^T S B
-            # Q_ux = B^T S A
-            # K_k = Q_uu^{-1} Q_ux
-            # S = Q_xx - Q_ux^T K_k  (= Q + A^T S A - K^T Q_uu K)
             Q_xx = Q + A_d.T @ S @ A_d
             Q_uu = R + B_d.T @ S @ B_d
             Q_ux = B_d.T @ S @ A_d
 
-            K_k = np.linalg.solve(Q_uu, Q_ux)  # (1, 8)
+            K_k = np.linalg.solve(Q_uu, Q_ux)
             K_seq[k] = K_k
 
             S = Q_xx - K_k.T @ Q_uu @ K_k
-
-            # Ensure symmetry
             S = 0.5 * (S + S.T)
 
         # --- Forward pass with new gains ---
@@ -150,29 +155,39 @@ def compute_ilqr_gains(cfg, q0, dq0, N_horizon=500, dt=0.001, n_iter=10):
         u_new = np.zeros(N_horizon)
         q = q0.copy()
         dq = dq0.copy()
+        total_cost = 0.0
 
         for k in range(N_horizon):
             x_new[k, :4] = q
             x_new[k, 4:] = dq
 
-            # Deviation from nominal
             dx = np.empty(n_x)
             dx[:4] = q - x_traj[k, :4]
             dx[4:] = dq - x_traj[k, 4:]
 
-            # Updated control: u = u_nom - K * dx
             u_k = u_traj[k] - (K_seq[k] @ dx)[0]
             u_new[k] = u_k
+
+            # Accumulate cost
+            z_k = np.empty(n_x)
+            z_k[:4] = q - q_eq
+            z_k[4:] = dq
+            total_cost += float(z_k @ Q @ z_k + u_k * R[0, 0] * u_k) * dt
 
             if k < N_horizon - 1:
                 q, dq = _rk4_step(q, dq, u_k, p, dt)
 
+        # Convergence check
+        cost_reduction = (prev_cost - total_cost) / max(abs(prev_cost), 1e-10)
+        if iteration > 0 and abs(cost_reduction) < 1e-4:
+            converged = True
+
         x_traj = x_new
         u_traj = u_new
+        prev_cost = total_cost
 
-    # Convert gains to output format (N_horizon, 1, 8)
-    # The gains K_seq are already in the right shape from the last backward pass
-    # But we need to express them as gains around equilibrium for downstream use
+        if converged:
+            break
+
     K_traj = K_seq.copy()
-
     return K_traj, x_traj

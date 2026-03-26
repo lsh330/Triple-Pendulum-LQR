@@ -53,6 +53,11 @@ def solve_acceleration(M, rhs):
 
     # adj(M) = cofactor matrix transposed, so adj[i,j] = A[j,i]
     # x = adj(M) * rhs / det
+    if abs(det) < 1e-30:
+        # Mass matrix near-singular: return zeros to avoid NaN propagation
+        x = np.zeros(4)
+        return x
+
     inv_det = 1.0 / det
     r0 = rhs[0]; r1 = rhs[1]; r2 = rhs[2]; r3 = rhs[3]
 

@@ -101,6 +101,25 @@ class TestForwardDynamics:
         # System should accelerate under gravity
         assert np.linalg.norm(ddq) > 0
 
+    def test_consistency_multiple_configs(self, p):
+        """Array and scalar dynamics must agree at various configurations."""
+        from dynamics.forward_dynamics.forward_dynamics import forward_dynamics
+        from dynamics.forward_dynamics.forward_dynamics_fast import forward_dynamics_fast
+
+        configs = [
+            (np.array([0.0, np.pi, 0.0, 0.0]), np.array([0.5, 0.1, -0.2, 0.15]), 10.0),
+            (np.array([0.1, np.pi + 0.3, 0.1, -0.1]), np.array([1.0, -0.5, 0.3, -0.2]), -5.0),
+            (np.array([-0.2, np.pi - 0.2, -0.15, 0.05]), np.zeros(4), 0.0),
+            (np.array([0.0, np.pi, 0.5, -0.3]), np.array([0.0, 2.0, -1.0, 0.5]), 50.0),
+        ]
+        for q, dq, u in configs:
+            ddq_arr = forward_dynamics(q, dq, u, p)
+            ddq0, ddq1, ddq2, ddq3 = forward_dynamics_fast(
+                q[0], q[1], q[2], q[3], dq[0], dq[1], dq[2], dq[3], u, p)
+            ddq_scalar = np.array([ddq0, ddq1, ddq2, ddq3])
+            np.testing.assert_allclose(ddq_arr, ddq_scalar, atol=1e-10,
+                err_msg=f"Mismatch at q={q}, dq={dq}, u={u}")
+
     def test_rk4_energy_bounded(self, q_eq, p):
         """RK4 step should not blow up energy for small dt."""
         from dynamics.forward_dynamics.forward_dynamics_fast import rk4_step_fast
