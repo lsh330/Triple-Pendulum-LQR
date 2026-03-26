@@ -1,0 +1,24 @@
+import numpy as np
+from numba import njit
+
+from dynamics.mass_matrix.assembly import mass_matrix
+from dynamics.coriolis.christoffel import coriolis_vector
+from dynamics.gravity.gravity_vector import gravity_vector
+from dynamics.forward_dynamics.tau_assembly import assemble_tau
+from dynamics.forward_dynamics.solve_acceleration import solve_acceleration
+
+
+@njit(cache=True)
+def forward_dynamics(q, dq, u, p):
+    M = mass_matrix(q, p)
+    C = coriolis_vector(q, dq, p)
+    G = gravity_vector(q, p)
+    tau = assemble_tau(u)
+
+    # rhs = tau - C - G  (both C and G are 4x1)
+    rhs = np.zeros(4)
+    for i in range(4):
+        rhs[i] = tau[i] - C[i, 0] - G[i, 0]
+
+    ddq = solve_acceleration(M, rhs)
+    return ddq
