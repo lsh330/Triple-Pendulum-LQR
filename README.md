@@ -61,16 +61,16 @@ The Medrano-Cerda system [1] has been used extensively in control research since
 
 | Parameter | Value | Unit |
 |-----------|-------|------|
-| Cart mass m_c | 2.4 | kg |
-| Link 1 mass m₁ | 1.323 | kg |
-| Link 2 mass m₂ | 1.389 | kg |
-| Link 3 mass m₃ | 0.8655 | kg |
-| Link 1 length L₁ | 0.402 | m |
-| Link 2 length L₂ | 0.332 | m |
-| Link 3 length L₃ | 0.720 | m |
+| Cart mass m<sub>c</sub> | 2.4 | kg |
+| Link 1 mass m<sub>1</sub> | 1.323 | kg |
+| Link 2 mass m<sub>2</sub> | 1.389 | kg |
+| Link 3 mass m<sub>3</sub> | 0.8655 | kg |
+| Link 1 length L<sub>1</sub> | 0.402 | m |
+| Link 2 length L<sub>2</sub> | 0.332 | m |
+| Link 3 length L<sub>3</sub> | 0.720 | m |
 | Gravity g | 9.81 | m/s² |
 
-Notable feature: L₃ is the longest link (0.72 m) but lightest (0.87 kg), making the tip highly susceptible to disturbances and the system challenging to stabilize.
+Notable feature: L<sub>3</sub> is the longest link (0.72 m) but lightest (0.87 kg), making the tip highly susceptible to disturbances and the system challenging to stabilize.
 
 ---
 
@@ -78,7 +78,7 @@ Notable feature: L₃ is the longest link (0.72 m) but lightest (0.87 kg), makin
 
 ### 1. System Description
 
-A cart of mass m_c translates along a horizontal rail. Three uniform rigid links form a serial chain attached to the cart by revolute joints. The generalized coordinates are:
+A cart of mass m<sub>c</sub> translates along a horizontal rail. Three uniform rigid links (m<sub>1</sub>, L<sub>1</sub>), (m<sub>2</sub>, L<sub>2</sub>), (m<sub>3</sub>, L<sub>3</sub>) form a serial chain attached to the cart by revolute joints. The generalized coordinates are:
 
 $$\mathbf{q} = \begin{bmatrix} x \\\ \theta_1 \\\ \theta_2 \\\ \theta_3 \end{bmatrix}$$
 
@@ -106,7 +106,7 @@ $$y_{cm,k} = -\sum_{i=1}^{k-1} L_i \cos \phi_i - \frac{L_k}{2} \cos \phi_k$$
 
 #### 2.2 Energy
 
-Kinetic energy (with moment of inertia I_k = m_k L_k² / 12 for uniform rods):
+Kinetic energy (with moment of inertia I<sub>k</sub> = m<sub>k</sub>L<sub>k</sub>² / 12 for uniform rods):
 
 $$T = \frac{1}{2} m_c \dot{x}^2 + \sum_{k=1}^{3} \left[ \frac{1}{2} m_k \left( \dot{x}_{cm,k}^2 + \dot{y}_{cm,k}^2 \right) + \frac{1}{2} I_k \dot{\phi}_k^2 \right]$$
 
@@ -127,9 +127,9 @@ The resulting 4×4 symmetric mass matrix:
 $$M(\mathbf{q}) = \begin{bmatrix} M_t & m_{x1} & m_{x2} & m_{x3} \\\ m_{x1} & M_{11} & M_{12} & M_{13} \\\ m_{x2} & M_{12} & M_{22} & M_{23} \\\ m_{x3} & M_{13} & M_{23} & M_{33} \end{bmatrix}$$
 
 where:
-- M_t = m_c + m₁ + m₂ + m₃ is the total system mass
-- m_{x1}, m_{x2}, m_{x3} are cart-link coupling terms (functions of cos φ₁, cos φ₂, cos φ₃)
-- M_{ij} form the 3×3 pendulum inertia block (functions of cos θ₂, cos θ₃, cos(θ₂ + θ₃))
+- M<sub>t</sub> = m<sub>c</sub> + m<sub>1</sub> + m<sub>2</sub> + m<sub>3</sub> is the total system mass
+- m<sub>x1</sub>, m<sub>x2</sub>, m<sub>x3</sub> are cart-link coupling terms (functions of cos φ<sub>1</sub>, cos φ<sub>2</sub>, cos φ<sub>3</sub>)
+- M<sub>ij</sub> form the 3×3 pendulum inertia block (functions of cos θ<sub>2</sub>, cos θ<sub>3</sub>, cos(θ<sub>2</sub> + θ<sub>3</sub>))
 
 Built from three families of derived constants:
 
@@ -147,7 +147,7 @@ $$h_i = \sum_{j,k} \Gamma_{ijk} \, \dot{q}_j \, \dot{q}_k$$
 
 $$\Gamma_{ijk} = \frac{1}{2} \left( \frac{\partial M_{ij}}{\partial q_k} + \frac{\partial M_{ik}}{\partial q_j} - \frac{\partial M_{jk}}{\partial q_i} \right)$$
 
-The gravity vector (with gravity constants g_i = γ_i · g):
+The gravity vector (with gravity constants g<sub>i</sub> = γ<sub>i</sub> · g):
 
 $$G(\mathbf{q}) = \begin{bmatrix} 0 \\\ g_1 \sin \phi_1 + g_2 \sin \phi_2 + g_3 \sin \phi_3 \\\ g_2 \sin \phi_2 + g_3 \sin \phi_3 \\\ g_3 \sin \phi_3 \end{bmatrix}$$
 
@@ -159,7 +159,7 @@ $$M(\mathbf{q}) \, \ddot{\mathbf{q}} + C(\mathbf{q}, \dot{\mathbf{q}}) \, \dot{\
 
 #### 3.1 Linearization
 
-The system is linearized around the upright equilibrium **q**\* = (0, π, 0, 0)ᵀ, **q̇**\* = **0** using numerical central differences to obtain the Jacobians A_q, A_q̇, B_u.
+The system is linearized around the upright equilibrium **q**\* = (0, π, 0, 0)ᵀ, **q̇**\* = **0** using numerical central differences to obtain the Jacobians A<sub>q</sub>, A<sub>q̇</sub>, B<sub>u</sub>.
 
 The 8-dimensional state-space form with **z** = (δ**q**, δ**q̇**)ᵀ:
 
@@ -195,7 +195,7 @@ $$K = R^{-1} B^T P, \qquad u = -K \mathbf{z}$$
 
 #### 4.1 Lyapunov Stability
 
-The CARE solution P ≻ 0 defines a Lyapunov candidate V(**z**) = **z**ᵀP**z**:
+The CARE solution P ≻ 0 defines a Lyapunov candidate V(**z**) = **z**ᵀ P **z**:
 
 $$\dot{V} = -\mathbf{z}^T (Q + K^T R K) \mathbf{z} < 0 \quad \forall \, \mathbf{z} \neq \mathbf{0}$$
 
@@ -213,7 +213,7 @@ This guarantees:
 
 #### 4.3 Nyquist Criterion
 
-The open-loop plant has n_u unstable poles (right half-plane eigenvalues of A). Closed-loop stability requires the Nyquist contour of L(jω) to make exactly n_u clockwise encirclements of (−1 + 0j):
+The open-loop plant has n<sub>u</sub> unstable poles (right half-plane eigenvalues of A). Closed-loop stability requires the Nyquist contour of L(jω) to make exactly n<sub>u</sub> clockwise encirclements of (−1 + 0j):
 
 $$N_{\text{CW}} = n_u$$
 
@@ -225,7 +225,7 @@ $$d(t) = \mathcal{F}^{-1} \left[ W(j\omega) \cdot H(j\omega) \right]$$
 
 $$H(j\omega) = \frac{1}{1 + (\omega / \omega_c)^4}$$
 
-where W(jω) is the white noise spectrum and ω_c = 2πf_c is the cutoff angular frequency.
+where W(jω) is the white noise spectrum and ω<sub>c</sub> = 2πf<sub>c</sub> is the cutoff angular frequency.
 
 ### 6. Numerical Integration
 
@@ -239,7 +239,7 @@ All dynamics functions (M, C, G, forward dynamics) are compiled to native machin
 
 ## Analysis Results
 
-All results below use the Medrano-Cerda parameters with initial impulse = 5 N·s and band-limited noise (RMS = 15 N, f_c = 3 Hz).
+All results below use the Medrano-Cerda parameters with initial impulse = 5 N·s and band-limited noise (RMS = 15 N, f<sub>c</sub> = 3 Hz).
 
 ### Dynamics Analysis
 
@@ -269,17 +269,17 @@ All results below use the Medrano-Cerda parameters with initial impulse = 5 N·s
 
 **Frequency Spectrum** (top-right): FFT of the control signal shows dominant energy below 5 Hz, matching the pendulum's natural frequencies. The disturbance spectrum rolls off at 3 Hz (the Butterworth cutoff). The controller bandwidth extends to ~10 Hz.
 
-**Bode Plot — Open Loop** (middle-left): Magnitude plot of |L(jω)| with the gain crossover frequency ω_gc annotated. Phase margin (PM) and gain margin (GM) are displayed. The slope at crossover (in dB/decade) indicates stability margin quality. The −3 dB closed-loop bandwidth is also shown.
+**Bode Plot — Open Loop** (middle-left): Magnitude plot of |L(jω)| with the gain crossover frequency ω<sub>gc</sub> annotated. Phase margin (PM) and gain margin (GM) are displayed. The slope at crossover (in dB/decade) indicates stability margin quality. The −3 dB closed-loop bandwidth is also shown.
 
-**Nyquist Diagram** (middle-right): The Nyquist contour of L(jω) for ω > 0 (solid blue) and its reflection for ω < 0 (dashed). The critical point (−1 + 0j) is marked. Direction arrows show increasing ω. The minimum distance from the contour to (−1, 0) quantifies the robustness margin. The number of clockwise encirclements must equal n_u = 3 (the number of unstable open-loop poles).
+**Nyquist Diagram** (middle-right): The Nyquist contour of L(jω) for ω > 0 (solid blue) and its reflection for ω < 0 (dashed). The critical point (−1 + 0j) is marked. Direction arrows show increasing ω. The minimum distance from the contour to (−1, 0) quantifies the robustness margin. The number of clockwise encirclements must equal n<sub>u</sub> = 3 (the number of unstable open-loop poles).
 
-**Sensitivity S(jω) and T(jω)** (second-from-bottom left): |S(jω)| (blue) should remain below 6 dB to avoid noise amplification. |T(jω)| (red) is the complementary sensitivity. Peak values M_s and M_t are annotated. The crossover frequency where |S| = |T| separates the disturbance rejection band from the noise attenuation band.
+**Sensitivity S(jω) and T(jω)** (second-from-bottom left): |S(jω)| (blue) should remain below 6 dB to avoid noise amplification. |T(jω)| (red) is the complementary sensitivity. Peak values M<sub>s</sub> and M<sub>t</sub> are annotated. The crossover frequency where |S| = |T| separates the disturbance rejection band from the noise attenuation band.
 
 **Pole Map** (second-from-bottom right): Open-loop poles (red crosses) include 3 in the right half-plane, confirming the system is **open-loop unstable**. Closed-loop poles (blue circles) are all in the left half-plane, confirming stabilization. Each pole is annotated with its damping ratio ζ = −Re(p) / |p|.
 
 **Bode Plot — Closed Loop** (bottom-left): Transfer function from disturbance d to cart position x. The −3 dB bandwidth and any resonance peaks are annotated.
 
-**Step Response** (bottom-right): Response to a unit step disturbance force. Annotated metrics: overshoot (%), settling time T_s (2% band), rise time T_r (10%→90%).
+**Step Response** (bottom-right): Response to a unit step disturbance force. Annotated metrics: overshoot (%), settling time T<sub>s</sub> (2% band), rise time T<sub>r</sub> (10%→90%).
 
 ### LQR Verification
 
@@ -295,16 +295,16 @@ All results below use the Medrano-Cerda parameters with initial impulse = 5 N·s
 
 **Return Difference |1 + L(jω)|** (bottom-left): The Kalman inequality requires this to be ≥ 0 dB at all frequencies. This is the **signature guarantee** of SISO LQR. The minimum value and frequency are annotated. Violation would indicate a non-optimal or incorrect LQR design.
 
-**Nyquist Encirclement Verification** (bottom-right): Nyquist contour with computed number of clockwise encirclements N_CW of (−1, 0). For stability: N_CW must equal the number of unstable open-loop poles n_u. A PASS/FAIL indicator is displayed.
+**Nyquist Encirclement Verification** (bottom-right): Nyquist contour with computed number of clockwise encirclements N<sub>CW</sub> of (−1, 0). For stability: N<sub>CW</sub> must equal the number of unstable open-loop poles n<sub>u</sub>. A PASS/FAIL indicator is displayed.
 
 ### Animation
 
 ![Animation](images/animation.gif)
 
 Real-time animation of the cart-pendulum system. Each link is color-coded:
-- **Red**: Link 1 (L₁ = 0.402 m, m₁ = 1.323 kg)
-- **Green**: Link 2 (L₂ = 0.332 m, m₂ = 1.389 kg)
-- **Blue**: Link 3 (L₃ = 0.720 m, m₃ = 0.8655 kg)
+- **Red**: Link 1 (L<sub>1</sub> = 0.402 m, m<sub>1</sub> = 1.323 kg)
+- **Green**: Link 2 (L<sub>2</sub> = 0.332 m, m<sub>2</sub> = 1.389 kg)
+- **Blue**: Link 3 (L<sub>3</sub> = 0.720 m, m<sub>3</sub> = 0.8655 kg)
 
 The faint red trace shows the trajectory of the tip (end of link 3). The gray cart oscillates about x = 0 while keeping all three links balanced upright against continuous random forcing.
 
