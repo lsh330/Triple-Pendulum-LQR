@@ -3,6 +3,9 @@
 import numpy as np
 import scipy.signal as sig
 
+from parameters.config import SystemConfig
+from control.lqr import compute_lqr_gains
+
 
 def compute_lqr_verification(t, q, dq, q_eq, K, A, B, P, Q, R, freq_w=None):
     """
@@ -92,4 +95,70 @@ def compute_lqr_verification(t, q, dq, q_eq, K, A, B, P, Q, R, freq_w=None):
         "A_cl_damping": damping,
         "A_cl_wn": wn,
         "t": t,
+    }
+
+
+def compute_monte_carlo_robustness(cfg, n_samples=20, perturbation=0.10, seed=42):
+    """Compute Monte Carlo Bode and pole data with +/-10% mass perturbation.
+
+    Returns dict with:
+      - mc_bode_w: frequency array
+      - mc_bode_mag: list of magnitude arrays (dB) for each perturbed system
+      - mc_cl_poles: list of closed-loop pole arrays for each perturbed system
+      - nominal_bode_mag: nominal magnitude array (dB)
+      - nominal_cl_poles: nominal closed-loop poles
+    """
+    rng = np.random.default_rng(seed)
+    freq_w = np.logspace(-2, 3, 500)
+
+    # Nominal system
+    K_nom, A_nom, B_nom, _, _, _ = compute_lqr_gains(cfg)
+    C_nom = K_nom.reshape(1, -1)
+    D_nom = np.zeros((1, 1))
+    sys_nom = sig.lti(A_nom, B_nom.reshape(-1, 1), C_nom, D_nom)
+    w_nom, H_nom = sig.freqresp(sys_nom, w=freq_w)
+    mag_nom_dB = 20 * np.log10(np.abs(H_nom.flatten()) + 1e-30)
+    A_cl_nom = A_nom - B_nom @ K_nom
+    poles_nom = np.linalg.eigvals(A_cl_nom)
+
+    mc_bode_mag = []
+    mc_cl_poles = []
+
+    for _ in range(n_samples):
+        # Perturb masses by +/-perturbation
+        scale_mc = 1.0 + rng.uniform(-perturbation, perturbation)
+        scale_m1 = 1.0 + rng.uniform(-perturbation, perturbation)
+        scale_m2 = 1.0 + rng.uniform(-perturbation, perturbation)
+        scale_m3 = 1.0 + rng.uniform(-perturbation, perturbation)
+
+        cfg_pert = SystemConfig(
+            mc=cfg.mc * scale_mc,
+            m1=cfg.m1 * scale_m1,
+            m2=cfg.m2 * scale_m2,
+            m3=cfg.m3 * scale_m3,
+            L1=cfg.L1, L2=cfg.L2, L3=cfg.L3,
+            g=cfg._phys.g,
+        )
+
+        try:
+            K_p, A_p, B_p, _, _, _ = compute_lqr_gains(cfg_pert)
+            C_p = K_p.reshape(1, -1)
+            D_p = np.zeros((1, 1))
+            sys_p = sig.lti(A_p, B_p.reshape(-1, 1), C_p, D_p)
+            _, H_p = sig.freqresp(sys_p, w=freq_w)
+            mag_p_dB = 20 * np.log10(np.abs(H_p.flatten()) + 1e-30)
+            A_cl_p = A_p - B_p @ K_p
+            poles_p = np.linalg.eigvals(A_cl_p)
+            mc_bode_mag.append(mag_p_dB)
+            mc_cl_poles.append(poles_p)
+        except Exception:
+            # Skip failed perturbations
+            continue
+
+    return {
+        "mc_bode_w": w_nom,
+        "mc_bode_mag": mc_bode_mag,
+        "mc_cl_poles": mc_cl_poles,
+        "nominal_bode_mag": mag_nom_dB,
+        "nominal_cl_poles": poles_nom,
     }

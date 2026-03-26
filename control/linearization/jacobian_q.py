@@ -2,7 +2,7 @@ import numpy as np
 from dynamics.forward_dynamics.forward_dynamics import forward_dynamics
 
 
-def compute_A_q(q_eq, dq_eq, u_eq, p, eps=1e-5):
+def compute_A_q(q_eq, dq_eq, u_eq, p, eps=1e-7):
     """Central difference of forward_dynamics w.r.t. q -> 4x4 ndarray."""
     n = len(q_eq)
     A_q = np.zeros((n, n))

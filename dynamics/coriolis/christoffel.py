@@ -7,7 +7,7 @@ from dynamics.mass_matrix.assembly import mass_matrix
 @njit(cache=True)
 def coriolis_vector(q, dq, p):
     n = 4
-    eps = 1e-7
+    eps = 1e-5
     h = np.zeros((n, 1))
 
     # Precompute dM/dq_k via central differences

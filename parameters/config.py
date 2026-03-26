@@ -9,6 +9,14 @@ from parameters.equilibrium import equilibrium as _equilibrium
 class SystemConfig:
     def __init__(self, mc: float, m1: float, m2: float, m3: float,
                  L1: float, L2: float, L3: float, g: float = 9.81):
+        # Validate that mass and length parameters are positive and g > 0
+        for name, val in [('mc', mc), ('m1', m1), ('m2', m2), ('m3', m3),
+                          ('L1', L1), ('L2', L2), ('L3', L3)]:
+            if val <= 0:
+                raise ValueError(f"Parameter '{name}' must be positive, got {val}")
+        if g <= 0:
+            raise ValueError(f"Parameter 'g' must be positive, got {g}")
+
         self._phys = PhysicalParams(mc=mc, m1=m1, m2=m2, m3=m3,
                                     L1=L1, L2=L2, L3=L3, g=g)
         self._derived = compute_derived(self._phys)

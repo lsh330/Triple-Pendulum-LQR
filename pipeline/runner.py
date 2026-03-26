@@ -12,7 +12,7 @@ from simulation.loop.time_loop import simulate
 from analysis.state.derived_state import compute_derived_state
 from analysis.energy.total_energy import compute_energy
 from analysis.frequency.frequency_response import compute_frequency_response
-from analysis.lqr_verification.compute_verification import compute_lqr_verification
+from analysis.lqr_verification.compute_verification import compute_lqr_verification, compute_monte_carlo_robustness
 from analysis.summary.print_summary import print_summary
 from visualization.animation.show_animation import show_animation
 from visualization.dynamics_plots.show_dynamics_plots import show_dynamics_plots
@@ -51,13 +51,15 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     freq_data = compute_frequency_response(A, B, K, A_cl)
     q_eq = cfg.equilibrium
     lqr_verif = compute_lqr_verification(t, q, dq, q_eq, K, A, B, P, Q, R)
+    print("Computing Monte Carlo robustness...")
+    mc_robustness = compute_monte_carlo_robustness(cfg)
     print_summary(q, dq, state, u_ctrl, u_dist, freq_data)
 
     # 5. Visualization
     fig_anim, ani = show_animation(cfg, t, state, dt=dt)
-    fig_dyn = show_dynamics_plots(t, q, dq, state, energy)
+    fig_dyn = show_dynamics_plots(t, q, dq, state, energy, u_ctrl=u_ctrl)
     fig_ctrl = show_control_plots(t, u_ctrl, u_dist, dt, freq_data)
-    fig_lqr = show_lqr_plots(lqr_verif)
+    fig_lqr = show_lqr_plots(lqr_verif, mc_robustness=mc_robustness)
 
     # 6. Save outputs
     print("\nSaving outputs...")

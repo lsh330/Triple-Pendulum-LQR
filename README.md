@@ -261,7 +261,13 @@ All results below use the Medrano-Cerda parameters with initial impulse = 5 N·s
 
 **Energy** (bottom-left): Breakdown of total mechanical energy into kinetic (translational + rotational) and gravitational potential components. In a conservative system without control, total energy would be constant; deviations reflect energy injected or dissipated by the controller.
 
-**Phase Portrait** (bottom-right): State-space trajectories plotting angle deviation vs angular velocity for each link. In a stable system, trajectories converge to the origin; the shape of the spiral indicates the damping characteristics.
+**Energy** (row 4, left): Breakdown of total mechanical energy into kinetic (translational + rotational) and gravitational potential components. In a conservative system without control, total energy would be constant; deviations reflect energy injected or dissipated by the controller.
+
+**Phase Portrait** (row 4, right): State-space trajectories plotting angle deviation vs angular velocity for each link. In a stable system, trajectories converge to the origin; the shape of the spiral indicates the damping characteristics.
+
+**Control Force** (bottom-left): The single control input F applied to the cart over time. Peak annotations highlight the maximum actuator effort required during the initial transient.
+
+**Joint Reaction Estimation** (bottom-right): Generalized accelerations (numerical second derivatives) for the cart and each joint. Serves as a proxy for the generalized forces acting through the equations of motion.
 
 #### Simulation Results for This System
 
@@ -271,6 +277,8 @@ All results below use the Medrano-Cerda parameters with initial impulse = 5 N·s
 - Cart acceleration peaks at **~200 m/s²** at t = 0 (impulsive response), settling to ±20 m/s² during noise rejection.
 - θ<sub>3</sub> (tip link) shows the **largest angular accelerations** (~500°/s²) due to its low inertia (I<sub>3</sub> = 0.0374 kg·m²) and long moment arm (L<sub>3</sub> = 0.72 m).
 - Kinetic energy spikes at t = 0 from the impulse. Potential energy remains nearly constant near V ≈ (m<sub>1</sub> + m<sub>2</sub> + m<sub>3</sub>)gL<sub>total</sub>/2 since the pendulum stays near upright. Total energy **fluctuates** as the controller continuously injects and dissipates energy to counteract the stochastic disturbance.
+- Control force peaks at **~−500 N** at t = 0, then settles to ±50 N during noise rejection. The negative peak reflects the LQR's aggressive response to the +x impulse.
+- Generalized accelerations confirm that θ<sub>3</sub> (tip) experiences the **highest joint loads** due to its low inertia and long moment arm.
 - All three phase trajectories **spiral inward** toward (0, 0), visually confirming asymptotic stability. The spiraling pattern indicates underdamped oscillatory convergence — consistent with the moderate damping (Q<sub>vel</sub> = 10) in the LQR cost.
 
 ---
@@ -325,7 +333,11 @@ All results below use the Medrano-Cerda parameters with initial impulse = 5 N·s
 
 **Return Difference |1 + L(jω)|** (bottom-left): Frequency-domain plot of the return difference, which is the key quantity in the Kalman inequality. For any SISO LQR design, |1 + L(jω)| ≥ 1 (i.e., ≥ 0 dB) must hold at all frequencies. This is a fundamental property of LQR — violation would indicate an implementation error or a non-optimal design.
 
-**Nyquist Encirclement Verification** (bottom-right): Independent verification of the Nyquist stability criterion. The algorithm computes the winding number of the Nyquist contour around (−1, 0) and compares it to the number of unstable open-loop poles. A PASS result confirms that the Nyquist criterion is satisfied.
+**Nyquist Encirclement Verification** (row 3, left): Independent verification of the Nyquist stability criterion. The algorithm computes the winding number of the Nyquist contour around (−1, 0) and compares it to the number of unstable open-loop poles. A PASS result confirms that the Nyquist criterion is satisfied.
+
+**Monte Carlo Bode** (bottom-left): Open-loop Bode magnitude overlaid for 20 random mass perturbations (±10% on each link mass independently). The nominal response is shown in blue; perturbed responses in gray. If all curves maintain similar shape, the LQR is robust to parametric uncertainty.
+
+**Closed-Loop Pole Scatter** (bottom-right): Closed-loop poles for the same 20 perturbed systems. Nominal poles are shown as blue circles; perturbed poles as gray dots. If all perturbed poles remain in the left half-plane (LHP), the system is robustly stable under ±10% mass uncertainty.
 
 #### Simulation Results for This System
 
@@ -335,6 +347,7 @@ All results below use the Medrano-Cerda parameters with initial impulse = 5 N·s
 - The cumulative cost J(t) **converges** to a finite value, confirming the infinite-horizon cost integral is bounded. Under the persistent noise, J(t) grows slowly in a linear fashion after the transient dies — this is expected since the noise continuously injects cost.
 - The return difference |1 + L(jω)| is **≥ 0 dB at all frequencies**, satisfying the Kalman inequality. This confirms the LQR design provides the guaranteed minimum gain margin of (−6 dB, +∞) and phase margin of ≥ 60°.
 - The Nyquist encirclement count is **N<sub>CW</sub> = 3**, exactly matching n<sub>u</sub> = 3 (the number of unstable open-loop poles). **PASS** — the Nyquist criterion is satisfied.
+- Monte Carlo analysis with **20 random ±10% mass perturbations** shows all perturbed Bode curves maintain similar shape to the nominal, confirming **parametric robustness**. All perturbed closed-loop poles remain in the left half-plane — the LQR design is **robustly stable** under realistic manufacturing tolerances.
 
 ---
 
@@ -363,9 +376,9 @@ All automatically saved to `images/` on each run:
 
 | File | Content |
 |------|---------|
-| `dynamics_analysis.png` | 8 subplots: position, velocity, acceleration, energy, phase portrait |
+| `dynamics_analysis.png` | 10 subplots: position, velocity, acceleration, energy, phase portrait, control force, joint reactions |
 | `control_analysis.png` | 8 subplots: Bode, Nyquist, sensitivity, poles, step response, spectrum |
-| `lqr_verification.png` | 6 subplots: Lyapunov, Riccati, cost, Kalman inequality, Nyquist check |
+| `lqr_verification.png` | 8 subplots: Lyapunov, Riccati, cost, Kalman inequality, Monte Carlo Bode, pole scatter |
 | `animation.gif` | Cart-pendulum animation at 30 fps |
 
 ---

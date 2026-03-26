@@ -33,8 +33,13 @@ def simulate(cfg, K, t_end=10.0, dt=0.002, impulse=0.0, disturbance=None):
     q_eq = cfg.equilibrium
     K_flat = K.flatten()
 
-    N = int(round(t_end / dt)) + 1
+    N = int(np.ceil(t_end / dt)) + 1
     t_arr = np.linspace(0.0, t_end, N)
+
+    if disturbance is not None:
+        assert len(disturbance) >= N, (
+            f"Disturbance array length {len(disturbance)} must be >= N={N}"
+        )
 
     q_arr = np.zeros((N, 4))
     dq_arr = np.zeros((N, 4))
