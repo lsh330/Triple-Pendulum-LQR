@@ -108,7 +108,7 @@ def simulate(cfg, K, t_end=10.0, dt=0.001, impulse=0.0, disturbance=None,
                               dist_arr[:3] if dist_arr.shape[0] >= 3 else np.empty(0),
                               gs_dev, gs_K, gs_slopes, u_max)
 
-        q_arr, dq_arr, u_ctrl_arr, u_dist_arr = _run_loop_gs_fast(
+        q_arr, dq_arr, u_ctrl_arr, u_dist_arr, u_raw_peak, n_sat = _run_loop_gs_fast(
             N, dt, q0, dq0, q_eq, p, dist_arr, gs_dev, gs_K, gs_slopes, u_max
         )
     else:
@@ -117,18 +117,18 @@ def simulate(cfg, K, t_end=10.0, dt=0.001, impulse=0.0, disturbance=None,
             _run_loop_fast(3, dt, q0, dq0, q_eq, K_flat, p,
                            dist_arr[:3] if dist_arr.shape[0] >= 3 else np.empty(0), u_max)
 
-        q_arr, dq_arr, u_ctrl_arr, u_dist_arr = _run_loop_fast(
+        q_arr, dq_arr, u_ctrl_arr, u_dist_arr, u_raw_peak, n_sat = _run_loop_fast(
             N, dt, q0, dq0, q_eq, K_flat, p, dist_arr, u_max
         )
 
     # Post-simulation validation
+    from utils.logger import get_logger
+    _log = get_logger()
     if np.any(np.isnan(q_arr)):
-        from utils.logger import get_logger
-        _log = get_logger()
         nan_step = np.where(np.isnan(q_arr[:, 0]))[0]
         first_nan = nan_step[0] if len(nan_step) > 0 else -1
         _log.warning("Simulation diverged (NaN detected at step %d / %d). "
                      "Possible causes: mass matrix singularity, dt too large, "
                      "or unstable controller.", first_nan, N)
 
-    return t_arr, q_arr, dq_arr, u_ctrl_arr, u_dist_arr
+    return t_arr, q_arr, dq_arr, u_ctrl_arr, u_dist_arr, u_raw_peak, int(n_sat)

@@ -106,9 +106,9 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
 
     # 3. Simulate with gain-scheduled control
     log.info("Simulating (gain-scheduled, %s)...", gain_scheduler_type)
-    t, q, dq, u_ctrl, u_dist = simulate(cfg, K, t_end=t_end, dt=dt,
-                                          impulse=impulse, disturbance=dist,
-                                          gain_scheduler=gs, u_max=u_max)
+    t, q, dq, u_ctrl, u_dist, u_raw_peak, n_sat = simulate(cfg, K, t_end=t_end, dt=dt,
+                                                            impulse=impulse, disturbance=dist,
+                                                            gain_scheduler=gs, u_max=u_max)
     log.info("Done: %d steps", len(t))
 
     # 4. Analysis
@@ -120,7 +120,8 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     lqr_verif = compute_lqr_verification(t, q, dq, q_eq, K, A, B, P, Q, R)
     log.info("Computing Monte Carlo robustness...")
     mc_robustness = compute_monte_carlo_robustness(cfg)
-    print_summary(q, dq, state, u_ctrl, u_dist, freq_data, u_max=u_max)
+    print_summary(q, dq, state, u_ctrl, u_dist, freq_data,
+                  u_max=u_max, u_raw_peak=u_raw_peak, n_saturated=n_sat)
 
     # 4b. ROA and Gain Scheduling stability
     log.info("Estimating Region of Attraction...")

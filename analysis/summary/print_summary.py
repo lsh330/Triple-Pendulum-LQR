@@ -7,7 +7,8 @@ from utils.logger import get_logger
 log = get_logger()
 
 
-def print_summary(q, dq, state, u_ctrl, u_dist, freq_data, u_max=None) -> None:
+def print_summary(q, dq, state, u_ctrl, u_dist, freq_data,
+                  u_max=None, u_raw_peak=None, n_saturated=None) -> None:
     """Print key simulation metrics."""
     log.info("=" * 60)
     log.info("  SIMULATION SUMMARY")
@@ -26,18 +27,18 @@ def print_summary(q, dq, state, u_ctrl, u_dist, freq_data, u_max=None) -> None:
     valid_u = u_ctrl[np.isfinite(u_ctrl)]
     if len(valid_u) > 0:
         log.info("  Control force  : [%+.2f, %+.2f] N", valid_u.min(), valid_u.max())
-        peak_u = max(abs(valid_u.min()), abs(valid_u.max()))
     else:
         log.info("  Control force  : N/A (simulation diverged)")
-        peak_u = 0.0
-    # Saturation statistics
-    if u_max is not None and u_max < 1e20 and len(valid_u) > 0:
-        n_saturated = int(np.sum(np.abs(valid_u) >= u_max - 0.01))
-        sat_ratio = n_saturated / max(len(valid_u), 1) * 100
-        log.info("  Saturation     : %d steps (%.1f%%), u_max=%.0f N, peak |u|=%.1f N",
-                 n_saturated, sat_ratio, u_max, peak_u)
-    elif len(valid_u) > 0:
-        log.info("  Peak |u|       : %.1f N (no saturation limit)", peak_u)
+
+    # Saturation statistics (from loop-level tracking)
+    if u_raw_peak is not None and u_max is not None and u_max < 1e20:
+        n_sat = n_saturated if n_saturated is not None else 0
+        sat_ratio = n_sat / max(len(valid_u), 1) * 100
+        log.info("  Saturation     : %d steps (%.1f%%), u_max=%.0f N, peak |u_raw|=%.1f N",
+                 n_sat, sat_ratio, u_max, u_raw_peak)
+    elif u_raw_peak is not None:
+        log.info("  Peak |u_raw|   : %.1f N (no saturation limit)", u_raw_peak)
+
     log.info("  Disturbance    : [%+.2f, %+.2f] N", np.nanmin(u_dist), np.nanmax(u_dist))
 
     # Frequency-domain data (if available)

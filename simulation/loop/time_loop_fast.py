@@ -21,11 +21,18 @@ def _angle_wrap(dx):
 
 @njit(cache=True)
 def _run_loop_fast(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max):
-    """Zero-allocation simulation loop with scalar state."""
+    """Zero-allocation simulation loop with scalar state.
+
+    Returns (q_arr, dq_arr, u_ctrl_arr, u_dist_arr, u_raw_peak, n_saturated).
+    u_raw_peak: maximum |u| before saturation clipping.
+    n_saturated: number of steps where saturation was applied.
+    """
     q_arr = np.empty((N, 4))
     dq_arr = np.empty((N, 4))
     u_ctrl_arr = np.empty(N)
     u_dist_arr = np.empty(N)
+    u_raw_peak = 0.0
+    n_saturated = 0
 
     # Unpack initial state to scalars
     sq0 = q0[0]; sq1 = q0[1]; sq2 = q0[2]; sq3 = q0[3]
@@ -46,11 +53,18 @@ def _run_loop_fast(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max):
         u_c = -(K_flat[0] * z0 + K_flat[1] * z1 + K_flat[2] * z2 + K_flat[3] * z3
               + K_flat[4] * sdq0 + K_flat[5] * sdq1 + K_flat[6] * sdq2 + K_flat[7] * sdq3)
 
+        # Track raw control before saturation
+        u_abs = abs(u_c)
+        if u_abs > u_raw_peak:
+            u_raw_peak = u_abs
+
         # Saturation
         if u_c > u_max:
             u_c = u_max
+            n_saturated += 1
         elif u_c < -u_max:
             u_c = -u_max
+            n_saturated += 1
         u_ctrl_arr[k] = u_c
 
         u_d = 0.0
@@ -83,7 +97,7 @@ def _run_loop_fast(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max):
             dq_arr[fill_k, 2] = np.nan; dq_arr[fill_k, 3] = np.nan
             u_ctrl_arr[fill_k] = np.nan
             u_dist_arr[fill_k] = np.nan
-        return q_arr, dq_arr, u_ctrl_arr, u_dist_arr
+        return q_arr, dq_arr, u_ctrl_arr, u_dist_arr, u_raw_peak, n_saturated
 
     # Last step control
     z0 = sq0 - eq0
@@ -92,27 +106,37 @@ def _run_loop_fast(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max):
     z3 = _angle_wrap(sq3 - eq3)
     u_c = -(K_flat[0] * z0 + K_flat[1] * z1 + K_flat[2] * z2 + K_flat[3] * z3
           + K_flat[4] * sdq0 + K_flat[5] * sdq1 + K_flat[6] * sdq2 + K_flat[7] * sdq3)
+    u_abs = abs(u_c)
+    if u_abs > u_raw_peak:
+        u_raw_peak = u_abs
     if u_c > u_max:
         u_c = u_max
+        n_saturated += 1
     elif u_c < -u_max:
         u_c = -u_max
+        n_saturated += 1
     u_ctrl_arr[N - 1] = u_c
     if has_dist and disturbance.shape[0] >= N:
         u_dist_arr[N - 1] = disturbance[N - 1]
     else:
         u_dist_arr[N - 1] = 0.0
 
-    return q_arr, dq_arr, u_ctrl_arr, u_dist_arr
+    return q_arr, dq_arr, u_ctrl_arr, u_dist_arr, u_raw_peak, n_saturated
 
 
 @njit(cache=True)
 def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
                       gs_dev_angles, gs_K_gains, gs_slopes, u_max):
-    """Zero-allocation gain-scheduled simulation loop with cubic Hermite interpolation."""
+    """Zero-allocation gain-scheduled simulation loop with cubic Hermite interpolation.
+
+    Returns (q_arr, dq_arr, u_ctrl_arr, u_dist_arr, u_raw_peak, n_saturated).
+    """
     q_arr = np.empty((N, 4))
     dq_arr = np.empty((N, 4))
     u_ctrl_arr = np.empty(N)
     u_dist_arr = np.empty(N)
+    u_raw_peak = 0.0
+    n_saturated = 0
 
     sq0 = q0[0]; sq1 = q0[1]; sq2 = q0[2]; sq3 = q0[3]
     sdq0 = dq0[0]; sdq1 = dq0[1]; sdq2 = dq0[2]; sdq3 = dq0[3]
@@ -165,10 +189,15 @@ def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
         u_c = -(K0 * z0 + K1 * z1 + K2 * z2 + K3 * z3
               + K4 * sdq0 + K5 * sdq1 + K6 * sdq2 + K7 * sdq3)
 
+        u_abs = abs(u_c)
+        if u_abs > u_raw_peak:
+            u_raw_peak = u_abs
         if u_c > u_max:
             u_c = u_max
+            n_saturated += 1
         elif u_c < -u_max:
             u_c = -u_max
+            n_saturated += 1
         u_ctrl_arr[k] = u_c
 
         u_d = 0.0
@@ -199,7 +228,7 @@ def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
             dq_arr[fill_k, 2] = np.nan; dq_arr[fill_k, 3] = np.nan
             u_ctrl_arr[fill_k] = np.nan
             u_dist_arr[fill_k] = np.nan
-        return q_arr, dq_arr, u_ctrl_arr, u_dist_arr
+        return q_arr, dq_arr, u_ctrl_arr, u_dist_arr, u_raw_peak, n_saturated
 
     # Last step
     delta = _angle_wrap(sq1 - eq1)
@@ -219,7 +248,6 @@ def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
         t_interp = (delta - gs_dev_angles[idx]) / h_seg
         t2 = t_interp * t_interp
         t3 = t2 * t_interp
-        # Hermite basis functions
         h00 = 2.0*t3 - 3.0*t2 + 1.0
         h10 = t3 - 2.0*t2 + t_interp
         h01 = -2.0*t3 + 3.0*t2
@@ -235,12 +263,19 @@ def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
 
     z0 = sq0-eq0; z1 = _angle_wrap(sq1-eq1); z2 = _angle_wrap(sq2-eq2); z3 = _angle_wrap(sq3-eq3)
     u_c = -(K0*z0+K1*z1+K2*z2+K3*z3+K4*sdq0+K5*sdq1+K6*sdq2+K7*sdq3)
-    if u_c > u_max: u_c = u_max
-    elif u_c < -u_max: u_c = -u_max
+    u_abs = abs(u_c)
+    if u_abs > u_raw_peak:
+        u_raw_peak = u_abs
+    if u_c > u_max:
+        u_c = u_max
+        n_saturated += 1
+    elif u_c < -u_max:
+        u_c = -u_max
+        n_saturated += 1
     u_ctrl_arr[N-1] = u_c
     if has_dist and disturbance.shape[0] >= N:
         u_dist_arr[N-1] = disturbance[N-1]
     else:
         u_dist_arr[N-1] = 0.0
 
-    return q_arr, dq_arr, u_ctrl_arr, u_dist_arr
+    return q_arr, dq_arr, u_ctrl_arr, u_dist_arr, u_raw_peak, n_saturated
