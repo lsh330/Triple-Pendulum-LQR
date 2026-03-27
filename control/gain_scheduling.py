@@ -140,7 +140,9 @@ class MultiAxisGainScheduler:
     """3D gain scheduling on (theta1, theta2, theta3) with trilinear interpolation.
 
     Creates a tensor-product grid of operating points and precomputes LQR
-    gains at each vertex. Runtime lookup uses trilinear interpolation.
+    gains at each vertex. The Python-level get_gain() uses full trilinear
+    interpolation. The JIT fast loop uses a 1D cubic Hermite projection
+    (theta2=theta3=0 center slice) for zero-overhead scalar operation.
     """
 
     def __init__(self, cfg,

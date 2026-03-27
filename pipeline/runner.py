@@ -73,6 +73,7 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     if gain_scheduler_type == "3d":
         log.info("Building 3D multi-axis gain scheduler (7x5x5 = 175 points)...")
         gs = MultiAxisGainScheduler(cfg)
+        log.info("  Note: fast loop uses 1D cubic Hermite projection (theta2=theta3=0 slice)")
     else:
         log.info("Building 1D gain scheduler (cubic Hermite, 7 points)...")
         gs = GainScheduler(cfg)
@@ -119,7 +120,7 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     lqr_verif = compute_lqr_verification(t, q, dq, q_eq, K, A, B, P, Q, R)
     log.info("Computing Monte Carlo robustness...")
     mc_robustness = compute_monte_carlo_robustness(cfg)
-    print_summary(q, dq, state, u_ctrl, u_dist, freq_data)
+    print_summary(q, dq, state, u_ctrl, u_dist, freq_data, u_max=u_max)
 
     # 4b. ROA and Gain Scheduling stability
     log.info("Estimating Region of Attraction...")
@@ -130,6 +131,8 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
 
     log.info("Verifying gain scheduling stability...")
     gs_1d = gs if isinstance(gs, GainScheduler) else GainScheduler(cfg)
+    if not isinstance(gs, GainScheduler):
+        log.info("  (3D scheduler: stability verified using 1D proxy)")
     gs_stability = verify_gain_scheduling_stability(cfg, gs_1d)
     log.info("  All operating points stable: %s", gs_stability['all_points_stable'])
     log.info("  Interpolated all stable: %s", gs_stability['interpolated_all_stable'])

@@ -73,6 +73,17 @@ def _run_loop_fast(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max):
         dq_arr[k + 1, 0] = sdq0; dq_arr[k + 1, 1] = sdq1
         dq_arr[k + 1, 2] = sdq2; dq_arr[k + 1, 3] = sdq3
 
+    # If simulation diverged (NaN break), fill remainder with NaN
+    if sq0 != sq0:  # NaN check
+        for fill_k in range(k + 2, N):
+            q_arr[fill_k, 0] = np.nan; q_arr[fill_k, 1] = np.nan
+            q_arr[fill_k, 2] = np.nan; q_arr[fill_k, 3] = np.nan
+            dq_arr[fill_k, 0] = np.nan; dq_arr[fill_k, 1] = np.nan
+            dq_arr[fill_k, 2] = np.nan; dq_arr[fill_k, 3] = np.nan
+        u_ctrl_arr[N - 1] = np.nan
+        u_dist_arr[N - 1] = np.nan
+        return q_arr, dq_arr, u_ctrl_arr, u_dist_arr
+
     # Last step control
     z0 = sq0 - eq0
     z1 = _angle_wrap(sq1 - eq1)
@@ -176,6 +187,17 @@ def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
         q_arr[k + 1, 2] = sq2; q_arr[k + 1, 3] = sq3
         dq_arr[k + 1, 0] = sdq0; dq_arr[k + 1, 1] = sdq1
         dq_arr[k + 1, 2] = sdq2; dq_arr[k + 1, 3] = sdq3
+
+    # If simulation diverged (NaN break), fill remainder with NaN
+    if sq0 != sq0:  # NaN check
+        for fill_k in range(k + 2, N):
+            q_arr[fill_k, 0] = np.nan; q_arr[fill_k, 1] = np.nan
+            q_arr[fill_k, 2] = np.nan; q_arr[fill_k, 3] = np.nan
+            dq_arr[fill_k, 0] = np.nan; dq_arr[fill_k, 1] = np.nan
+            dq_arr[fill_k, 2] = np.nan; dq_arr[fill_k, 3] = np.nan
+        u_ctrl_arr[N - 1] = np.nan
+        u_dist_arr[N - 1] = np.nan
+        return q_arr, dq_arr, u_ctrl_arr, u_dist_arr
 
     # Last step
     delta = _angle_wrap(sq1 - eq1)
