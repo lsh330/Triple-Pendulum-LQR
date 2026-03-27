@@ -4,7 +4,7 @@ LQR-optimal stabilization of a triple inverted pendulum on a cart under band-lim
 
 > **Benchmark system**: All physical parameters are taken from the **Medrano-Cerda triple inverted pendulum** (University of Salford, UK, 1997), one of the most widely cited experimental benchmarks in robust and optimal control literature [1].
 
-> **v2.5** — Cubic Hermite interpolation now active in the JIT fast loop (was linear-only). Matrix exponential propagation for controller comparison (replacing Euler). Monte Carlo robustness perturbs both mass (±10%) and link length (±5%). Saturation statistics in summary. Linearization self-verification at DEBUG level. Energy conservation and timestep convergence tests. BadCoefficients warnings suppressed. See [Changelog](#changelog).
+> **v2.5** — Raw control tracking with actuator margin analysis (`peak |u_raw|=499.7 N` vs `u_max=200 N`). ROA adaptive CI bug fixed. Full 8-variable NaN detection with complete array fill. NaN-safe summary output. Cubic Hermite in JIT fast loop. Matrix exponential comparison. MC mass+length perturbation. Linearization self-check. Energy/convergence tests. See [Changelog](#changelog).
 
 ## Quick Start
 
@@ -564,7 +564,7 @@ All results below use the Medrano-Cerda parameters with initial impulse = 5 N·s
 - Cart acceleration peaks at **~200 m/s²** at t = 0 (impulsive response), settling to ±20 m/s² during noise rejection.
 - θ<sub>3</sub> (tip link) shows the **largest angular accelerations** (~500°/s²) due to its low inertia (I<sub>3</sub> = 0.0374 kg·m²) and long moment arm (L<sub>3</sub> = 0.72 m).
 - Kinetic energy spikes at t = 0 from the impulse. Potential energy remains nearly constant near V ≈ (m<sub>1</sub> + m<sub>2</sub> + m<sub>3</sub>)gL<sub>total</sub>/2 since the pendulum stays near upright. Total energy **fluctuates** as the controller continuously injects and dissipates energy to counteract the stochastic disturbance.
-- Control force peaks at **~−500 N** at t = 0, then settles to ±50 N during noise rejection. The negative peak reflects the LQR's aggressive response to the +x impulse.
+- Control force is clipped at **−200 N** (actuator saturation) at t = 0, while the raw (unsaturated) controller demands **~500 N** — indicating the actuator operates at 2.5× its limit during the initial transient. Saturation occurs in only **33 steps (0.2%)** of the simulation. After the transient, control settles to ±50 N during noise rejection.
 - Generalized accelerations confirm that θ<sub>3</sub> (tip) experiences the **highest joint loads** due to its low inertia and long moment arm.
 - All three phase trajectories **spiral inward** toward (0, 0), visually confirming asymptotic stability. The spiraling pattern indicates underdamped oscillatory convergence — consistent with the moderate damping (Q<sub>vel</sub> = 10) in the LQR cost.
 
@@ -885,7 +885,7 @@ This triggers compilation of all `@njit(cache=True)` functions and stores the co
 
 | Version | Summary |
 |---------|---------|
-| **v2.5** | Cubic Hermite in JIT fast loop, matrix expm for comparison, mass+length MC perturbation, saturation stats, linearization self-check, energy/convergence tests, BadCoefficients suppressed |
+| **v2.5** | Raw control tracking (`u_raw_peak` vs `u_max`), ROA CI slice bug fix, full 8-var NaN detection + array fill, NaN-safe summary, cubic Hermite in JIT fast loop, matrix expm comparison, MC mass+length, linearization self-check, energy/convergence tests, bandwidth validation, BadCoefficients suppressed |
 | **v2.4** | Relative singularity tolerance, RK45 attempt guard, iLQR CARE terminal cost, CLI validation, adaptive Jacobian step, pole margin tests |
 | **v2.3** | All features pipeline-connected: `--gain-scheduler 3d`, `--adaptive-q`, zero dead code |
 | **v2.2** | GainScheduler passed to simulate(), YAML CLI override fix, iLQR wired, NaN detection |
