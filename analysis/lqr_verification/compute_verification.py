@@ -1,5 +1,6 @@
 """Compute all LQR verification metrics."""
 
+import warnings
 import numpy as np
 import scipy.signal as sig
 
@@ -52,17 +53,18 @@ def compute_lqr_verification(t, q, dq, q_eq, K, A, B, P, Q, R, freq_w=None):
     # --- Return difference: |1 + L(jw)| >= 1 (Kalman inequality) ---
     C_L = K.reshape(1, -1)
     D_L = np.zeros((1, 1))
-    sys_L = sig.lti(A, B.reshape(-1, 1), C_L, D_L)
-    w_rd, H_rd = sig.freqresp(sys_L, w=freq_w)
+    sys_L = sig.StateSpace(A, B.reshape(-1, 1), C_L, D_L)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", sig.BadCoefficients)
+        w_rd, H_rd = sig.freqresp(sys_L, w=freq_w)
     L_jw = H_rd.flatten()
     return_diff = np.abs(1.0 + L_jw)
 
     # --- Nyquist encirclement count ---
-    # For real systems, the full Nyquist contour (w: -inf to +inf) is symmetric.
-    # The w>0 half-contour gives half the total winding.
-    # Use dense frequency sampling to capture all features.
     w_nyq = np.logspace(-4, 4, 4000)
-    _, H_nyq = sig.freqresp(sys_L, w=w_nyq)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", sig.BadCoefficients)
+        _, H_nyq = sig.freqresp(sys_L, w=w_nyq)
     L_nyq = H_nyq.flatten()
 
     # Winding number of L(jw) + 1 around origin = encirclements of (-1,0)
@@ -112,17 +114,21 @@ def compute_lqr_verification(t, q, dq, q_eq, K, A, B, P, Q, R, freq_w=None):
     }
 
 
-def _mc_single_sample(cfg, scale_mc, scale_m1, scale_m2, scale_m3, freq_w):
-    """Single Monte Carlo sample. Returns (mag_dB, poles) or None on failure."""
+def _mc_single_sample(cfg, scale_mc, scale_m1, scale_m2, scale_m3,
+                      scale_L1, scale_L2, scale_L3, freq_w):
+    """Single Monte Carlo sample with mass AND length perturbation."""
     try:
         cfg_pert = SystemConfig(
             mc=cfg.mc * scale_mc, m1=cfg.m1 * scale_m1,
             m2=cfg.m2 * scale_m2, m3=cfg.m3 * scale_m3,
-            L1=cfg.L1, L2=cfg.L2, L3=cfg.L3, g=cfg._phys.g,
+            L1=cfg.L1 * scale_L1, L2=cfg.L2 * scale_L2,
+            L3=cfg.L3 * scale_L3, g=cfg._phys.g,
         )
         K_p, A_p, B_p, _, _, _ = compute_lqr_gains(cfg_pert)
-        sys_p = sig.lti(A_p, B_p.reshape(-1, 1), K_p.reshape(1, -1), np.zeros((1, 1)))
-        _, H_p = sig.freqresp(sys_p, w=freq_w)
+        sys_p = sig.StateSpace(A_p, B_p.reshape(-1, 1), K_p.reshape(1, -1), np.zeros((1, 1)))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", sig.BadCoefficients)
+            _, H_p = sig.freqresp(sys_p, w=freq_w)
         mag_dB = 20 * np.log10(np.abs(H_p.flatten()) + 1e-30)
         poles = np.linalg.eigvals(A_p - B_p @ K_p)
         return mag_dB, poles
@@ -131,7 +137,7 @@ def _mc_single_sample(cfg, scale_mc, scale_m1, scale_m2, scale_m3, freq_w):
 
 
 def compute_monte_carlo_robustness(cfg, n_samples=50, perturbation=0.10, seed=42):
-    """Compute Monte Carlo Bode and pole data with +/-10% mass perturbation.
+    """Compute Monte Carlo Bode and pole data with mass ±10% and length ±5% perturbation.
 
     Uses multiprocessing for parallel execution when available.
     """
@@ -140,8 +146,10 @@ def compute_monte_carlo_robustness(cfg, n_samples=50, perturbation=0.10, seed=42
 
     # Nominal
     K_nom, A_nom, B_nom, _, _, _ = compute_lqr_gains(cfg)
-    sys_nom = sig.lti(A_nom, B_nom.reshape(-1, 1), K_nom.reshape(1, -1), np.zeros((1, 1)))
-    w_nom, H_nom = sig.freqresp(sys_nom, w=freq_w)
+    sys_nom = sig.StateSpace(A_nom, B_nom.reshape(-1, 1), K_nom.reshape(1, -1), np.zeros((1, 1)))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", sig.BadCoefficients)
+        w_nom, H_nom = sig.freqresp(sys_nom, w=freq_w)
     mag_nom_dB = 20 * np.log10(np.abs(H_nom.flatten()) + 1e-30)
     poles_nom = np.linalg.eigvals(A_nom - B_nom @ K_nom)
 
@@ -153,6 +161,9 @@ def compute_monte_carlo_robustness(cfg, n_samples=50, perturbation=0.10, seed=42
             1.0 + rng.uniform(-perturbation, perturbation),
             1.0 + rng.uniform(-perturbation, perturbation),
             1.0 + rng.uniform(-perturbation, perturbation),
+            1.0 + rng.uniform(-perturbation * 0.5, perturbation * 0.5),
+            1.0 + rng.uniform(-perturbation * 0.5, perturbation * 0.5),
+            1.0 + rng.uniform(-perturbation * 0.5, perturbation * 0.5),
         ))
 
     # Try parallel execution

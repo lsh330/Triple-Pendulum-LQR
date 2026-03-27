@@ -100,16 +100,16 @@ def simulate(cfg, K, t_end=10.0, dt=0.001, impulse=0.0, disturbance=None,
         dq0 = apply_impulse(q_eq, p, impulse)
 
     if gain_scheduler is not None:
-        gs_dev, gs_K = gain_scheduler.pack_for_njit()
+        gs_dev, gs_K, gs_slopes = gain_scheduler.pack_for_njit()
 
         # Warmup JIT
         if N > 3:
             _run_loop_gs_fast(3, dt, q0, dq0, q_eq, p,
                               dist_arr[:3] if dist_arr.shape[0] >= 3 else np.empty(0),
-                              gs_dev, gs_K, u_max)
+                              gs_dev, gs_K, gs_slopes, u_max)
 
         q_arr, dq_arr, u_ctrl_arr, u_dist_arr = _run_loop_gs_fast(
-            N, dt, q0, dq0, q_eq, p, dist_arr, gs_dev, gs_K, u_max
+            N, dt, q0, dq0, q_eq, p, dist_arr, gs_dev, gs_K, gs_slopes, u_max
         )
     else:
         # Warmup JIT (first call compiles)

@@ -1,5 +1,6 @@
 """Compute the open-loop frequency response L(jw) = K (jwI - A)^{-1} B."""
 
+import warnings
 import numpy as np
 import scipy.signal as sig
 
@@ -12,9 +13,11 @@ def compute_open_loop_response(A, B, K, w) -> dict:
     """
     C_L = K.reshape(1, -1)
     D_L = np.zeros((1, 1))
-    sys_L = sig.lti(A, B.reshape(-1, 1), C_L, D_L)
+    sys_L = sig.StateSpace(A, B.reshape(-1, 1), C_L, D_L)
 
-    w_out, H = sig.freqresp(sys_L, w=w)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", sig.BadCoefficients)
+        w_out, H = sig.freqresp(sys_L, w=w)
 
     L_jw = H.flatten()
     L_mag = np.abs(L_jw)

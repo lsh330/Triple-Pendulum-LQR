@@ -4,6 +4,7 @@ Provides alternative control designs for the same triple pendulum system
 to demonstrate the advantages of LQR optimal control.
 """
 
+import warnings
 import numpy as np
 from scipy import signal
 
@@ -103,20 +104,25 @@ def compare_controllers(A, B, K_lqr, t_end=5.0, dt=0.001):
         eigs = np.linalg.eigvals(A_cl)
         is_stable = bool(np.all(eigs.real < 0))
 
-        # Time response (impulse on cart)
+        # Time response via exact matrix exponential propagation
         x = np.zeros((len(t), n))
-        x[0, 4] = 1.0  # initial cart velocity
+        x0 = np.zeros(n)
+        x0[4] = 1.0  # initial cart velocity
         if is_stable:
+            from scipy.linalg import expm
+            A_cl_dt = expm(A_cl * dt)
+            x[0] = x0
             for k in range(len(t) - 1):
-                dx = A_cl @ x[k]
-                x[k+1] = x[k] + dt * dx  # Euler (sufficient for comparison)
+                x[k+1] = A_cl_dt @ x[k]
 
         # Frequency response (loop transfer function)
         C_L = K_mat
         D_L = np.zeros((1, 1))
-        sys_L = signal.lti(A, B_col, C_L, D_L)
+        sys_L = signal.StateSpace(A, B_col, C_L, D_L)
         try:
-            w_out, H = signal.freqresp(sys_L, w=w)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", signal.BadCoefficients)
+                w_out, H = signal.freqresp(sys_L, w=w)
             L_mag = 20 * np.log10(np.abs(H.flatten()) + 1e-30)
         except Exception:
             w_out = w

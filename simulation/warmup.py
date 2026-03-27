@@ -24,7 +24,7 @@ def warmup_jit():
     Ks = np.zeros((3, 8))
     from simulation.loop.time_loop_fast import _run_loop_fast, _run_loop_gs_fast
     _run_loop_fast(3, 0.001, q, dq, q, np.zeros(8), p, np.empty(0), 1e30)
-    _run_loop_gs_fast(3, 0.001, q, dq, q, p, np.empty(0), dev, Ks, 1e30)
+    _run_loop_gs_fast(3, 0.001, q, dq, q, p, np.empty(0), dev, Ks, np.zeros((3, 8)), 1e30)
 
     # Trigger ROA fast kernel (parallel scalar dynamics)
     from analysis.region_of_attraction import _roa_batch

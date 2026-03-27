@@ -24,6 +24,12 @@ def print_summary(q, dq, state, u_ctrl, u_dist, freq_data) -> None:
 
     # Control effort
     log.info("  Control force  : [%+.2f, %+.2f] N", u_ctrl.min(), u_ctrl.max())
+    # Saturation statistics
+    u_max_abs = max(abs(u_ctrl.min()), abs(u_ctrl.max()))
+    n_saturated = int(np.sum(np.abs(u_ctrl) >= u_max_abs * 0.999))
+    sat_ratio = n_saturated / max(len(u_ctrl), 1) * 100
+    log.info("  Saturation     : %d steps (%.1f%%), peak |u| = %.1f N",
+             n_saturated, sat_ratio, u_max_abs)
     log.info("  Disturbance    : [%+.2f, %+.2f] N", u_dist.min(), u_dist.max())
 
     # Frequency-domain data (if available)

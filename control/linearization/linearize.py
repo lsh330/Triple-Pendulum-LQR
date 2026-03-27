@@ -14,27 +14,29 @@ def linearize(q_eq, p, eps=None, method="analytical"):
     """Linearize the system about the equilibrium point.
 
     Returns (A, B) where A is 8x8 and B is 8x1.
-
-    Parameters
-    ----------
-    q_eq : ndarray (4,)
-        Configuration at the linearization point.
-    p : ndarray
-        Packed system parameters.
-    eps : float or None
-        Kept for API compatibility; ignored by both methods.
-    method : str
-        "analytical" (default, exact dG/dq + dM/dq) or "numerical" (JIT FD).
+    Logs analytical vs numerical Jacobian comparison at DEBUG level.
     """
+    from utils.logger import get_logger
+    log = get_logger()
+
     if method == "analytical":
         try:
             A, B = compute_analytical_jacobians(q_eq, p)
+
+            # Self-verification: compare with numerical at DEBUG level
+            if log.isEnabledFor(10):  # DEBUG = 10
+                dq_eq = np.zeros(4)
+                u_eq = 0.0
+                A_num, B_num = compute_jacobians_jit(q_eq, dq_eq, u_eq, p)
+                max_diff_A = np.max(np.abs(A - A_num))
+                max_diff_B = np.max(np.abs(B - B_num))
+                log.debug("Linearization self-check: max|A_an-A_fd|=%.2e, max|B_an-B_fd|=%.2e",
+                         max_diff_A, max_diff_B)
+
             return A, B
         except (np.linalg.LinAlgError, ValueError) as e:
-            from utils.logger import get_logger
-            get_logger().warning("Analytical Jacobian failed (%s), falling back to numerical", e)
+            log.warning("Analytical Jacobian failed (%s), falling back to numerical", e)
 
-    # Fallback: JIT numerical Jacobians
     dq_eq = np.zeros(4)
     u_eq = 0.0
     A, B = compute_jacobians_jit(q_eq, dq_eq, u_eq, p)

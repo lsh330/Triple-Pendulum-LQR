@@ -4,7 +4,7 @@ LQR-optimal stabilization of a triple inverted pendulum on a cart under band-lim
 
 > **Benchmark system**: All physical parameters are taken from the **Medrano-Cerda triple inverted pendulum** (University of Salford, UK, 1997), one of the most widely cited experimental benchmarks in robust and optimal control literature [1].
 
-> **v2.4** — Production-grade release. All features pipeline-connected with CLI/YAML control. Analytical + numerical hybrid Jacobians, gain-scheduled simulation (1D/3D), adaptive Q (Bryson's rule), iLQR with CARE terminal cost, Halton quasi-random ROA, relative singularity tolerance, NaN detection, input validation, 50 tests passing. See [Changelog](#changelog) for full history.
+> **v2.5** — Cubic Hermite interpolation now active in the JIT fast loop (was linear-only). Matrix exponential propagation for controller comparison (replacing Euler). Monte Carlo robustness perturbs both mass (±10%) and link length (±5%). Saturation statistics in summary. Linearization self-verification at DEBUG level. Energy conservation and timestep convergence tests. BadCoefficients warnings suppressed. See [Changelog](#changelog).
 
 ## Quick Start
 
@@ -885,7 +885,8 @@ This triggers compilation of all `@njit(cache=True)` functions and stores the co
 
 | Version | Summary |
 |---------|---------|
-| **v2.4** | Final robustness polish: relative singularity tolerance, RK45 attempt guard, iLQR CARE terminal cost, CLI validation (dt>0, u_max>=0), adaptive Jacobian step, pole margin tests, energy conservation tests |
+| **v2.5** | Cubic Hermite in JIT fast loop, matrix expm for comparison, mass+length MC perturbation, saturation stats, linearization self-check, energy/convergence tests, BadCoefficients suppressed |
+| **v2.4** | Relative singularity tolerance, RK45 attempt guard, iLQR CARE terminal cost, CLI validation, adaptive Jacobian step, pole margin tests |
 | **v2.3** | All features pipeline-connected: `--gain-scheduler 3d`, `--adaptive-q`, zero dead code |
 | **v2.2** | GainScheduler passed to simulate(), YAML CLI override fix, iLQR wired, NaN detection |
 | **v2.1** | CARE controllability validation, Q/R checks, mass matrix singularity guard, ROA fast scalar kernel (3x), Halton quasi-random, ProcessPoolExecutor, iLQR matrix exponential, 3D GS grid 175pt, Bryson PD, parameter packing docs |

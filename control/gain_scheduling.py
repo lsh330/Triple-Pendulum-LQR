@@ -99,8 +99,8 @@ class GainScheduler:
         return _interp_cubic(delta, self.deviation_angles, self.K_gains, self.slopes)
 
     def pack_for_njit(self):
-        """Return (dev_angles, K_gains) for @njit (linear interp in fast loop)."""
-        return self.deviation_angles.copy(), self.K_gains.copy()
+        """Return (dev_angles, K_gains, slopes) for @njit cubic Hermite interpolation."""
+        return self.deviation_angles.copy(), self.K_gains.copy(), self.slopes.copy()
 
 
 @njit(cache=True)
@@ -182,11 +182,32 @@ class MultiAxisGainScheduler:
         return _interp_trilinear(d1, d2, d3, self.t1, self.t2, self.t3, self.K_grid)
 
     def pack_for_njit(self):
-        """Pack as 1D gain scheduler (fallback for existing fast loops)."""
-        # Project onto theta1 axis (theta2=theta3=0)
+        """Pack as 1D projection with cubic Hermite slopes for fast loops."""
         n2_mid = len(self.t2) // 2
         n3_mid = len(self.t3) // 2
-        return self.t1.copy(), self.K_grid[:, n2_mid, n3_mid, :].copy()
+        dev = self.t1.copy()
+        K_gains = self.K_grid[:, n2_mid, n3_mid, :].copy()
+        # Compute Fritsch-Carlson monotone slopes for projected 1D gains
+        n_pts = len(dev)
+        slopes = np.zeros((n_pts, 8))
+        for j in range(8):
+            for i in range(n_pts):
+                if i == 0:
+                    slopes[i, j] = (K_gains[1, j] - K_gains[0, j]) / (dev[1] - dev[0])
+                elif i == n_pts - 1:
+                    slopes[i, j] = (K_gains[-1, j] - K_gains[-2, j]) / (dev[-1] - dev[-2])
+                else:
+                    h_l = dev[i] - dev[i-1]
+                    h_r = dev[i+1] - dev[i]
+                    d_l = (K_gains[i, j] - K_gains[i-1, j]) / h_l
+                    d_r = (K_gains[i+1, j] - K_gains[i, j]) / h_r
+                    if d_l * d_r > 0:
+                        w1 = 2.0*h_r + h_l
+                        w2 = h_r + 2.0*h_l
+                        slopes[i, j] = (w1 + w2) / (w1/d_l + w2/d_r)
+                    else:
+                        slopes[i, j] = 0.0
+        return dev, K_gains, slopes
 
 
 @njit(cache=True)

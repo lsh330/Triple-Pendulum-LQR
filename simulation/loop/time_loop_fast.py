@@ -95,8 +95,8 @@ def _run_loop_fast(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max):
 
 @njit(cache=True)
 def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
-                      gs_dev_angles, gs_K_gains, u_max):
-    """Zero-allocation gain-scheduled simulation loop."""
+                      gs_dev_angles, gs_K_gains, gs_slopes, u_max):
+    """Zero-allocation gain-scheduled simulation loop with cubic Hermite interpolation."""
     q_arr = np.empty((N, 4))
     dq_arr = np.empty((N, 4))
     u_ctrl_arr = np.empty(N)
@@ -128,16 +128,23 @@ def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
                 if gs_dev_angles[i + 1] >= delta:
                     idx = i
                     break
-            t_interp = (delta - gs_dev_angles[idx]) / (gs_dev_angles[idx + 1] - gs_dev_angles[idx])
-            ot = 1.0 - t_interp
-            K0 = ot * gs_K_gains[idx, 0] + t_interp * gs_K_gains[idx+1, 0]
-            K1 = ot * gs_K_gains[idx, 1] + t_interp * gs_K_gains[idx+1, 1]
-            K2 = ot * gs_K_gains[idx, 2] + t_interp * gs_K_gains[idx+1, 2]
-            K3 = ot * gs_K_gains[idx, 3] + t_interp * gs_K_gains[idx+1, 3]
-            K4 = ot * gs_K_gains[idx, 4] + t_interp * gs_K_gains[idx+1, 4]
-            K5 = ot * gs_K_gains[idx, 5] + t_interp * gs_K_gains[idx+1, 5]
-            K6 = ot * gs_K_gains[idx, 6] + t_interp * gs_K_gains[idx+1, 6]
-            K7 = ot * gs_K_gains[idx, 7] + t_interp * gs_K_gains[idx+1, 7]
+            h_seg = gs_dev_angles[idx + 1] - gs_dev_angles[idx]
+            t_interp = (delta - gs_dev_angles[idx]) / h_seg
+            t2 = t_interp * t_interp
+            t3 = t2 * t_interp
+            # Hermite basis functions
+            h00 = 2.0*t3 - 3.0*t2 + 1.0
+            h10 = t3 - 2.0*t2 + t_interp
+            h01 = -2.0*t3 + 3.0*t2
+            h11 = t3 - t2
+            K0 = h00*gs_K_gains[idx,0] + h10*h_seg*gs_slopes[idx,0] + h01*gs_K_gains[idx+1,0] + h11*h_seg*gs_slopes[idx+1,0]
+            K1 = h00*gs_K_gains[idx,1] + h10*h_seg*gs_slopes[idx,1] + h01*gs_K_gains[idx+1,1] + h11*h_seg*gs_slopes[idx+1,1]
+            K2 = h00*gs_K_gains[idx,2] + h10*h_seg*gs_slopes[idx,2] + h01*gs_K_gains[idx+1,2] + h11*h_seg*gs_slopes[idx+1,2]
+            K3 = h00*gs_K_gains[idx,3] + h10*h_seg*gs_slopes[idx,3] + h01*gs_K_gains[idx+1,3] + h11*h_seg*gs_slopes[idx+1,3]
+            K4 = h00*gs_K_gains[idx,4] + h10*h_seg*gs_slopes[idx,4] + h01*gs_K_gains[idx+1,4] + h11*h_seg*gs_slopes[idx+1,4]
+            K5 = h00*gs_K_gains[idx,5] + h10*h_seg*gs_slopes[idx,5] + h01*gs_K_gains[idx+1,5] + h11*h_seg*gs_slopes[idx+1,5]
+            K6 = h00*gs_K_gains[idx,6] + h10*h_seg*gs_slopes[idx,6] + h01*gs_K_gains[idx+1,6] + h11*h_seg*gs_slopes[idx+1,6]
+            K7 = h00*gs_K_gains[idx,7] + h10*h_seg*gs_slopes[idx,7] + h01*gs_K_gains[idx+1,7] + h11*h_seg*gs_slopes[idx+1,7]
 
         z0 = sq0 - eq0
         z1 = _angle_wrap(sq1 - eq1)
@@ -184,12 +191,23 @@ def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
             if gs_dev_angles[i+1] >= delta:
                 idx = i
                 break
-        t_interp = (delta - gs_dev_angles[idx]) / (gs_dev_angles[idx+1] - gs_dev_angles[idx])
-        ot = 1.0 - t_interp
-        K0=ot*gs_K_gains[idx,0]+t_interp*gs_K_gains[idx+1,0]; K1=ot*gs_K_gains[idx,1]+t_interp*gs_K_gains[idx+1,1]
-        K2=ot*gs_K_gains[idx,2]+t_interp*gs_K_gains[idx+1,2]; K3=ot*gs_K_gains[idx,3]+t_interp*gs_K_gains[idx+1,3]
-        K4=ot*gs_K_gains[idx,4]+t_interp*gs_K_gains[idx+1,4]; K5=ot*gs_K_gains[idx,5]+t_interp*gs_K_gains[idx+1,5]
-        K6=ot*gs_K_gains[idx,6]+t_interp*gs_K_gains[idx+1,6]; K7=ot*gs_K_gains[idx,7]+t_interp*gs_K_gains[idx+1,7]
+        h_seg = gs_dev_angles[idx + 1] - gs_dev_angles[idx]
+        t_interp = (delta - gs_dev_angles[idx]) / h_seg
+        t2 = t_interp * t_interp
+        t3 = t2 * t_interp
+        # Hermite basis functions
+        h00 = 2.0*t3 - 3.0*t2 + 1.0
+        h10 = t3 - 2.0*t2 + t_interp
+        h01 = -2.0*t3 + 3.0*t2
+        h11 = t3 - t2
+        K0 = h00*gs_K_gains[idx,0] + h10*h_seg*gs_slopes[idx,0] + h01*gs_K_gains[idx+1,0] + h11*h_seg*gs_slopes[idx+1,0]
+        K1 = h00*gs_K_gains[idx,1] + h10*h_seg*gs_slopes[idx,1] + h01*gs_K_gains[idx+1,1] + h11*h_seg*gs_slopes[idx+1,1]
+        K2 = h00*gs_K_gains[idx,2] + h10*h_seg*gs_slopes[idx,2] + h01*gs_K_gains[idx+1,2] + h11*h_seg*gs_slopes[idx+1,2]
+        K3 = h00*gs_K_gains[idx,3] + h10*h_seg*gs_slopes[idx,3] + h01*gs_K_gains[idx+1,3] + h11*h_seg*gs_slopes[idx+1,3]
+        K4 = h00*gs_K_gains[idx,4] + h10*h_seg*gs_slopes[idx,4] + h01*gs_K_gains[idx+1,4] + h11*h_seg*gs_slopes[idx+1,4]
+        K5 = h00*gs_K_gains[idx,5] + h10*h_seg*gs_slopes[idx,5] + h01*gs_K_gains[idx+1,5] + h11*h_seg*gs_slopes[idx+1,5]
+        K6 = h00*gs_K_gains[idx,6] + h10*h_seg*gs_slopes[idx,6] + h01*gs_K_gains[idx+1,6] + h11*h_seg*gs_slopes[idx+1,6]
+        K7 = h00*gs_K_gains[idx,7] + h10*h_seg*gs_slopes[idx,7] + h01*gs_K_gains[idx+1,7] + h11*h_seg*gs_slopes[idx+1,7]
 
     z0 = sq0-eq0; z1 = _angle_wrap(sq1-eq1); z2 = _angle_wrap(sq2-eq2); z3 = _angle_wrap(sq3-eq3)
     u_c = -(K0*z0+K1*z1+K2*z2+K3*z3+K4*sdq0+K5*sdq1+K6*sdq2+K7*sdq3)

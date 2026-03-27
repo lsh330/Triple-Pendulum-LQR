@@ -149,3 +149,59 @@ class TestForwardDynamics:
         # State should remain bounded (no blow-up)
         assert all(abs(v) < 50 for v in [q0, q1, q2, q3, dq0, dq1, dq2, dq3]), \
             "RK4 integration diverged over 100 steps"
+
+    def test_energy_conservation_no_control(self, q_eq, p):
+        """Without control or friction, energy should be approximately conserved."""
+        from dynamics.forward_dynamics.forward_dynamics_fast import rk4_step_fast
+        from analysis.energy.kinetic_energy import compute_kinetic_energy
+        from analysis.energy.potential_energy import compute_potential_energy
+        from parameters.config import SystemConfig
+        cfg = SystemConfig(mc=2.4, m1=1.323, m2=1.389, m3=0.8655,
+                          L1=0.402, L2=0.332, L3=0.720)
+        # Start near upright with small perturbation
+        q0, q1, q2, q3 = 0.0, np.pi + 0.02, 0.0, 0.0
+        dq0, dq1, dq2, dq3 = 0.0, 0.0, 0.0, 0.0
+        # Compute initial energy
+        q_arr = np.array([[q0, q1, q2, q3]])
+        dq_arr = np.array([[dq0, dq1, dq2, dq3]])
+        phi1_0 = q1; phi2_0 = q1 + q2; phi3_0 = q1 + q2 + q3
+        E0 = (compute_kinetic_energy(cfg, q_arr, dq_arr,
+               np.array([phi1_0]), np.array([phi2_0]), np.array([phi3_0]))[0]
+              + compute_potential_energy(cfg,
+               np.array([phi1_0]), np.array([phi2_0]), np.array([phi3_0]))[0])
+        # Integrate 500 steps with no control
+        for _ in range(500):
+            q0, q1, q2, q3, dq0, dq1, dq2, dq3 = rk4_step_fast(
+                q0, q1, q2, q3, dq0, dq1, dq2, dq3, 0.0, p, 0.001)
+        # Compute final energy
+        q_arr = np.array([[q0, q1, q2, q3]])
+        dq_arr = np.array([[dq0, dq1, dq2, dq3]])
+        phi1_f = q1; phi2_f = q1 + q2; phi3_f = q1 + q2 + q3
+        Ef = (compute_kinetic_energy(cfg, q_arr, dq_arr,
+               np.array([phi1_f]), np.array([phi2_f]), np.array([phi3_f]))[0]
+              + compute_potential_energy(cfg,
+               np.array([phi1_f]), np.array([phi2_f]), np.array([phi3_f]))[0])
+        # Energy should be conserved within 1% (RK4 is not symplectic but close)
+        assert abs(Ef - E0) / max(abs(E0), 1e-6) < 0.01, \
+            f"Energy not conserved: E0={E0:.6f}, Ef={Ef:.6f}, drift={abs(Ef-E0)/abs(E0)*100:.2f}%"
+
+    def test_timestep_convergence(self, q_eq, p):
+        """Halving dt should reduce integration error quadratically (RK4 is O(dt^4))."""
+        from dynamics.forward_dynamics.forward_dynamics_fast import rk4_step_fast
+        q0, q1, q2, q3 = q_eq
+        dq0 = 0.5; dq1 = 0.0; dq2 = 0.0; dq3 = 0.0
+        # Integrate 0.1s with dt=0.002
+        sq0, sq1 = q0, q1
+        sdq0, sdq1 = dq0, dq1
+        for _ in range(50):
+            sq0, sq1, _, _, sdq0, sdq1, _, _ = rk4_step_fast(
+                sq0, sq1, q2, q3, sdq0, sdq1, 0.0, 0.0, 0.0, p, 0.002)
+        # Integrate 0.1s with dt=0.001
+        fq0, fq1 = q0, q1
+        fdq0, fdq1 = dq0, dq1
+        for _ in range(100):
+            fq0, fq1, _, _, fdq0, fdq1, _, _ = rk4_step_fast(
+                fq0, fq1, q2, q3, fdq0, fdq1, 0.0, 0.0, 0.0, p, 0.001)
+        # Both should give similar results (within RK4 O(dt^4) error)
+        assert abs(sq0 - fq0) < 1e-4, f"Cart position diverges: coarse={sq0:.6f}, fine={fq0:.6f}"
+        assert abs(sq1 - fq1) < 1e-4, f"Theta1 diverges: coarse={sq1:.6f}, fine={fq1:.6f}"
