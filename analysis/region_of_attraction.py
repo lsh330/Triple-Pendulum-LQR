@@ -160,8 +160,8 @@ def estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, dt=0.001,
         all_converged[total_samples:total_samples + current_batch] = converged
         total_samples += current_batch
 
-        # Check convergence of estimate
-        rate = np.mean(all_converged)
+        # Check convergence of estimate (only filled portion)
+        rate = np.mean(all_converged[:total_samples])
         # Wilson score 95% CI width
         z = 1.96
         n = total_samples

@@ -13,27 +13,32 @@ def print_summary(q, dq, state, u_ctrl, u_dist, freq_data, u_max=None) -> None:
     log.info("  SIMULATION SUMMARY")
     log.info("=" * 60)
 
-    # State ranges
-    log.info("  Cart position : [%+.4f, %+.4f] m", q[:, 0].min(), q[:, 0].max())
-    log.info("  Cart velocity : [%+.4f, %+.4f] m/s", dq[:, 0].min(), dq[:, 0].max())
+    # State ranges (NaN-safe for diverged simulations)
+    log.info("  Cart position : [%+.4f, %+.4f] m", np.nanmin(q[:, 0]), np.nanmax(q[:, 0]))
+    log.info("  Cart velocity : [%+.4f, %+.4f] m/s", np.nanmin(dq[:, 0]), np.nanmax(dq[:, 0]))
 
     for i, key in enumerate(["dth1", "dth2", "dth3"], 1):
         arr = state[key]
         log.info("  dtheta%d       : [%+.4f, %+.4f] deg",
-                 i, np.degrees(arr.min()), np.degrees(arr.max()))
+                 i, np.degrees(np.nanmin(arr)), np.degrees(np.nanmax(arr)))
 
-    # Control effort
-    log.info("  Control force  : [%+.2f, %+.2f] N", u_ctrl.min(), u_ctrl.max())
+    # Control effort (NaN-safe)
+    valid_u = u_ctrl[np.isfinite(u_ctrl)]
+    if len(valid_u) > 0:
+        log.info("  Control force  : [%+.2f, %+.2f] N", valid_u.min(), valid_u.max())
+        peak_u = max(abs(valid_u.min()), abs(valid_u.max()))
+    else:
+        log.info("  Control force  : N/A (simulation diverged)")
+        peak_u = 0.0
     # Saturation statistics
-    peak_u = max(abs(u_ctrl.min()), abs(u_ctrl.max()))
-    if u_max is not None and u_max < 1e20:
-        n_saturated = int(np.sum(np.abs(u_ctrl) >= u_max - 0.01))
-        sat_ratio = n_saturated / max(len(u_ctrl), 1) * 100
+    if u_max is not None and u_max < 1e20 and len(valid_u) > 0:
+        n_saturated = int(np.sum(np.abs(valid_u) >= u_max - 0.01))
+        sat_ratio = n_saturated / max(len(valid_u), 1) * 100
         log.info("  Saturation     : %d steps (%.1f%%), u_max=%.0f N, peak |u|=%.1f N",
                  n_saturated, sat_ratio, u_max, peak_u)
-    else:
+    elif len(valid_u) > 0:
         log.info("  Peak |u|       : %.1f N (no saturation limit)", peak_u)
-    log.info("  Disturbance    : [%+.2f, %+.2f] N", u_dist.min(), u_dist.max())
+    log.info("  Disturbance    : [%+.2f, %+.2f] N", np.nanmin(u_dist), np.nanmax(u_dist))
 
     # Frequency-domain data (if available)
     if freq_data is not None:

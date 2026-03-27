@@ -64,8 +64,9 @@ def _run_loop_fast(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max):
         sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3 = rk4_step_fast(
             sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3, u_total, p, dt)
 
-        # NaN/divergence detection
-        if sq0 != sq0 or sq1 != sq1:  # NaN check (NaN != NaN)
+        # NaN/divergence detection (check all state variables)
+        if (sq0 != sq0 or sq1 != sq1 or sq2 != sq2 or sq3 != sq3
+                or sdq0 != sdq0 or sdq1 != sdq1 or sdq2 != sdq2 or sdq3 != sdq3):
             break
 
         q_arr[k + 1, 0] = sq0; q_arr[k + 1, 1] = sq1
@@ -73,15 +74,15 @@ def _run_loop_fast(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max):
         dq_arr[k + 1, 0] = sdq0; dq_arr[k + 1, 1] = sdq1
         dq_arr[k + 1, 2] = sdq2; dq_arr[k + 1, 3] = sdq3
 
-    # If simulation diverged (NaN break), fill remainder with NaN
-    if sq0 != sq0:  # NaN check
-        for fill_k in range(k + 2, N):
+    # If simulation diverged (NaN break), fill ALL remainder with NaN
+    if sq0 != sq0 or sq1 != sq1 or sq2 != sq2 or sq3 != sq3:
+        for fill_k in range(k + 1, N):
             q_arr[fill_k, 0] = np.nan; q_arr[fill_k, 1] = np.nan
             q_arr[fill_k, 2] = np.nan; q_arr[fill_k, 3] = np.nan
             dq_arr[fill_k, 0] = np.nan; dq_arr[fill_k, 1] = np.nan
             dq_arr[fill_k, 2] = np.nan; dq_arr[fill_k, 3] = np.nan
-        u_ctrl_arr[N - 1] = np.nan
-        u_dist_arr[N - 1] = np.nan
+            u_ctrl_arr[fill_k] = np.nan
+            u_dist_arr[fill_k] = np.nan
         return q_arr, dq_arr, u_ctrl_arr, u_dist_arr
 
     # Last step control
@@ -179,8 +180,9 @@ def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
         sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3 = rk4_step_fast(
             sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3, u_total, p, dt)
 
-        # NaN/divergence detection
-        if sq0 != sq0 or sq1 != sq1:  # NaN check (NaN != NaN)
+        # NaN/divergence detection (all state variables)
+        if (sq0 != sq0 or sq1 != sq1 or sq2 != sq2 or sq3 != sq3
+                or sdq0 != sdq0 or sdq1 != sdq1 or sdq2 != sdq2 or sdq3 != sdq3):
             break
 
         q_arr[k + 1, 0] = sq0; q_arr[k + 1, 1] = sq1
@@ -188,15 +190,15 @@ def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
         dq_arr[k + 1, 0] = sdq0; dq_arr[k + 1, 1] = sdq1
         dq_arr[k + 1, 2] = sdq2; dq_arr[k + 1, 3] = sdq3
 
-    # If simulation diverged (NaN break), fill remainder with NaN
-    if sq0 != sq0:  # NaN check
-        for fill_k in range(k + 2, N):
+    # If simulation diverged (NaN break), fill ALL remainder with NaN
+    if sq0 != sq0 or sq1 != sq1 or sq2 != sq2 or sq3 != sq3:
+        for fill_k in range(k + 1, N):
             q_arr[fill_k, 0] = np.nan; q_arr[fill_k, 1] = np.nan
             q_arr[fill_k, 2] = np.nan; q_arr[fill_k, 3] = np.nan
             dq_arr[fill_k, 0] = np.nan; dq_arr[fill_k, 1] = np.nan
             dq_arr[fill_k, 2] = np.nan; dq_arr[fill_k, 3] = np.nan
-        u_ctrl_arr[N - 1] = np.nan
-        u_dist_arr[N - 1] = np.nan
+            u_ctrl_arr[fill_k] = np.nan
+            u_dist_arr[fill_k] = np.nan
         return q_arr, dq_arr, u_ctrl_arr, u_dist_arr
 
     # Last step

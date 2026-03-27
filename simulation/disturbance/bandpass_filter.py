@@ -6,6 +6,9 @@ def apply_lowpass(white, dt, bandwidth):
 
     H(f) = 1 / (1 + (f/bandwidth)^4)
     """
+    if bandwidth <= 0:
+        raise ValueError(f"Bandwidth must be positive, got {bandwidth}")
+
     N = len(white)
     freqs = np.fft.rfftfreq(N, d=dt)
     spectrum = np.fft.rfft(white)
