@@ -50,6 +50,25 @@ def _build_parser():
     p.add_argument("--adaptive-q", action="store_true",
                    help="Use inertia-scaled Q matrix (Bryson's rule) instead of fixed default")
 
+    # Equilibrium target (single-config stabilisation mode)
+    p.add_argument("--equilibrium", type=str, default=None,
+                   choices=["DDD", "DDU", "DUD", "DUU", "UDD", "UDU", "UUD", "UUU"],
+                   help="Target equilibrium configuration for stabilisation (default: UUU)")
+
+    # Form-switching mode
+    p.add_argument("--form-switch", action="store_true",
+                   help="Enable form-switching mode (multi-equilibrium transition)")
+    p.add_argument("--switch-source", type=str, default="DDD",
+                   choices=["DDD", "DDU", "DUD", "DUU", "UDD", "UDU", "UUD", "UUU"],
+                   help="Starting equilibrium for form-switch (default: DDD)")
+    p.add_argument("--switch-target", type=str, default="UUU",
+                   choices=["DDD", "DDU", "DUD", "DUU", "UDD", "UDU", "UUD", "UUU"],
+                   help="Goal equilibrium for form-switch (default: UUU)")
+    p.add_argument("--switch-time", type=float, default=30.0,
+                   help="Total simulation time for form-switch [s] (default: 30.0)")
+    p.add_argument("--k-energy", type=float, default=50.0,
+                   help="Energy swing-up gain for form-switch (default: 50.0)")
+
     # Config file
     p.add_argument("--config", type=str, default=None, help="YAML config file path")
 
@@ -151,15 +170,32 @@ def main(argv=None):
         L1=args.L1, L2=args.L2, L3=args.L3, g=args.g,
     )
 
-    run(cfg,
-        t_end=args.t_end, dt=args.dt, impulse=args.impulse,
-        dist_amplitude=args.dist_amplitude, dist_bandwidth=args.dist_bandwidth,
-        seed=args.seed, u_max=args.u_max,
-        use_ilqr=args.use_ilqr, ilqr_horizon=args.ilqr_horizon,
-        ilqr_iterations=args.ilqr_iterations,
-        gain_scheduler_type=args.gain_scheduler,
-        adaptive_q=args.adaptive_q,
-        no_display=args.no_display)
+    # Override target equilibrium when explicitly requested
+    if args.equilibrium is not None:
+        cfg.set_equilibrium(args.equilibrium)
+
+    if args.form_switch:
+        from pipeline.runner import run_switching
+        run_switching(
+            cfg,
+            source=args.switch_source,
+            target=args.switch_target,
+            t_end=args.switch_time,
+            dt=args.dt,
+            k_energy=args.k_energy,
+            u_max=args.u_max,
+            no_display=args.no_display,
+        )
+    else:
+        run(cfg,
+            t_end=args.t_end, dt=args.dt, impulse=args.impulse,
+            dist_amplitude=args.dist_amplitude, dist_bandwidth=args.dist_bandwidth,
+            seed=args.seed, u_max=args.u_max,
+            use_ilqr=args.use_ilqr, ilqr_horizon=args.ilqr_horizon,
+            ilqr_iterations=args.ilqr_iterations,
+            gain_scheduler_type=args.gain_scheduler,
+            adaptive_q=args.adaptive_q,
+            no_display=args.no_display)
 
 
 if __name__ == "__main__":

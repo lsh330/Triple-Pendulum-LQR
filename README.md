@@ -1,10 +1,10 @@
 # Cart + Triple Inverted Pendulum Simulator
 
-LQR-optimal stabilization of a triple inverted pendulum on a cart under band-limited stochastic disturbance. Provides comprehensive dynamics analysis, frequency-domain control analysis, and formal LQR verification with publication-quality visualizations.
+LQR-optimal stabilization of a triple inverted pendulum on a cart under band-limited stochastic disturbance. Supports **all 8 equilibrium configurations** (DDD–UUU) with energy-based swing-up and FSM form-switching control. Provides comprehensive dynamics analysis, frequency-domain control analysis, and formal LQR verification with publication-quality visualizations.
 
 > **Benchmark system**: All physical parameters are taken from the **Medrano-Cerda triple inverted pendulum** (University of Salford, UK, 1997), one of the most widely cited experimental benchmarks in robust and optimal control literature [1].
 
-> **v2.5** — Raw control tracking with actuator margin analysis (`peak |u_raw|=499.7 N` vs `u_max=200 N`). ROA adaptive CI bug fixed. Full 8-variable NaN detection with complete array fill. NaN-safe summary output. Cubic Hermite in JIT fast loop. Matrix exponential comparison. MC mass+length perturbation. Linearization self-check. Energy/convergence tests. See [Changelog](#changelog).
+> **v3.0** — **Multi-equilibrium control**: 8개 평형 구성 전체 지원, 에너지 기반 swing-up, FSM form-switching supervisor, Lyapunov ROA 기반 모드 전환, 히스테리시스 chattering 방지. Numba JIT 2,000×+ 실시간. 180개 테스트. 한글 이론/아키텍처 문서. See [Changelog](#changelog).
 
 ## Quick Start
 
@@ -16,9 +16,48 @@ python main.py --config config.yaml     # YAML configuration
 python main.py --use-ilqr               # Enable iLQR trajectory optimization
 python main.py --gain-scheduler 3d      # 3D trilinear gain scheduling (175 points)
 python main.py --adaptive-q             # Inertia-scaled Q matrix (Bryson's rule)
+python main.py --equilibrium UDD        # Stabilize at UDD equilibrium
+python main.py --form-switch            # Form-switching: DDD → UUU
+python main.py --form-switch --switch-source DDD --switch-target UUU --switch-time 30
 python prebuild_cache.py                # Pre-build JIT cache
-pytest                                  # Run tests
+pytest tests/ -v                        # Run 180 tests
+python benchmark.py                     # Performance benchmark
 ```
+
+## 다중 평형점 제어 (Multi-Equilibrium Control)
+
+삼중진자는 각 링크의 방향(Up/Down)에 따라 $2^3 = 8$개의 평형 구성을 가진다.
+
+| 구성 | 링크 방향 | 위치에너지 (J) | 안정성 |
+|------|-----------|---------------|--------|
+| DDD | ↓↓↓ | −19.6 | 안정 |
+| DDU | ↓↓↑ | −13.5 | 불안정 |
+| DUD | ↓↑↓ | −9.5 | 불안정 |
+| DUU | ↓↑↑ | −3.4 | 불안정 |
+| UDD | ↑↓↓ | +3.4 | 불안정 |
+| UDU | ↑↓↑ | +9.5 | 불안정 |
+| UUD | ↑↑↓ | +13.5 | 불안정 |
+| UUU | ↑↑↑ | +19.6 | 불안정 |
+
+### Form-Switching 제어
+
+에너지 기반 swing-up + LQR catch로 평형점 간 전환:
+
+```bash
+# DDD → UUU (기본: BFS로 최단 경로 계획)
+python main.py --form-switch
+
+# 특정 경로 지정
+python main.py --form-switch --switch-source DDD --switch-target UUU
+
+# 에너지 게인 및 시뮬레이션 시간 조정
+python main.py --form-switch --k-energy 80 --switch-time 40
+```
+
+### 이론 문서
+
+- [**THEORY.md**](docs/THEORY.md) — 라그랑주 역학, 8개 평형점, LQR, swing-up, FSM supervisor (554줄, 한글)
+- [**ARCHITECTURE.md**](docs/ARCHITECTURE.md) — 모듈 구조, 데이터 흐름, JIT 전략, 테스트 구조 (한글)
 
 ## Installation
 

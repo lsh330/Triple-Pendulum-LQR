@@ -90,6 +90,7 @@ class TestGainScheduling:
     def test_pack_for_njit(self, cfg):
         from control.gain_scheduling import GainScheduler
         gs = GainScheduler(cfg)
-        dev, K = gs.pack_for_njit()
+        dev, K, slopes = gs.pack_for_njit()
         assert dev.shape == (7,)
         assert K.shape == (7, 8)
+        assert slopes.shape == (7, 8)

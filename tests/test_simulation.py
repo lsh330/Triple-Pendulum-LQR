@@ -21,7 +21,7 @@ def K(cfg):
 class TestSimulationLoop:
     def test_output_shapes(self, cfg, K):
         from simulation.loop.time_loop import simulate
-        t, q, dq, u_ctrl, u_dist = simulate(cfg, K, t_end=0.1, dt=0.001)
+        t, q, dq, u_ctrl, u_dist, u_raw_peak, n_sat = simulate(cfg, K, t_end=0.1, dt=0.001)
         N = len(t)
         assert q.shape == (N, 4)
         assert dq.shape == (N, 4)
@@ -31,7 +31,7 @@ class TestSimulationLoop:
     def test_stability(self, cfg, K):
         """System should stay near equilibrium with small impulse."""
         from simulation.loop.time_loop import simulate
-        t, q, dq, _, _ = simulate(cfg, K, t_end=3.0, dt=0.001, impulse=1.0)
+        t, q, dq, _, _, _, _ = simulate(cfg, K, t_end=3.0, dt=0.001, impulse=1.0)
         # Cart should stay within 1m
         assert np.max(np.abs(q[:, 0])) < 1.0
         # Angles should stay within 30 degrees of equilibrium
@@ -42,7 +42,7 @@ class TestSimulationLoop:
 
     def test_no_nan(self, cfg, K):
         from simulation.loop.time_loop import simulate
-        t, q, dq, u_ctrl, u_dist = simulate(cfg, K, t_end=1.0, dt=0.001, impulse=5.0)
+        t, q, dq, u_ctrl, u_dist, _, _ = simulate(cfg, K, t_end=1.0, dt=0.001, impulse=5.0)
         assert not np.any(np.isnan(q))
         assert not np.any(np.isnan(dq))
         assert not np.any(np.isnan(u_ctrl))
@@ -51,8 +51,8 @@ class TestSimulationLoop:
         """Control force should respect saturation limit."""
         from simulation.loop.time_loop import simulate
         u_max = 100.0
-        _, _, _, u_ctrl, _ = simulate(cfg, K, t_end=0.5, dt=0.001,
-                                       impulse=5.0, u_max=u_max)
+        _, _, _, u_ctrl, _, _, _ = simulate(cfg, K, t_end=0.5, dt=0.001,
+                                             impulse=5.0, u_max=u_max)
         assert np.max(np.abs(u_ctrl)) <= u_max + 1e-10
 
 
@@ -94,8 +94,8 @@ class TestGainScheduledSimulation:
         from simulation.loop.time_loop import simulate
         from control.gain_scheduling import GainScheduler
         gs = GainScheduler(cfg)
-        t, q, dq, u_ctrl, _ = simulate(cfg, K, t_end=2.0, dt=0.001,
-                                         impulse=3.0, gain_scheduler=gs)
+        t, q, dq, u_ctrl, _, _, _ = simulate(cfg, K, t_end=2.0, dt=0.001,
+                                               impulse=3.0, gain_scheduler=gs)
         assert not np.any(np.isnan(q))
         q_eq = cfg.equilibrium
         max_dev = np.max(np.abs(q[-1, 1] - q_eq[1]))
@@ -106,10 +106,10 @@ class TestGainScheduledSimulation:
         from simulation.loop.time_loop import simulate
         from control.gain_scheduling import GainScheduler
         gs = GainScheduler(cfg)
-        _, q_gs, _, _, _ = simulate(cfg, K, t_end=1.0, dt=0.001,
-                                     impulse=2.0, gain_scheduler=gs)
-        _, q_fix, _, _, _ = simulate(cfg, K, t_end=1.0, dt=0.001,
-                                      impulse=2.0)
+        _, q_gs, _, _, _, _, _ = simulate(cfg, K, t_end=1.0, dt=0.001,
+                                           impulse=2.0, gain_scheduler=gs)
+        _, q_fix, _, _, _, _, _ = simulate(cfg, K, t_end=1.0, dt=0.001,
+                                            impulse=2.0)
         assert not np.any(np.isnan(q_gs))
         assert not np.any(np.isnan(q_fix))
 

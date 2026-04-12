@@ -159,3 +159,123 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     if not no_display:
         plt.show()
     return ani
+
+
+def run_switching(cfg, source="DDD", target="UUU", t_end=30.0, dt=0.001,
+                  k_energy=50.0, u_max=200.0, no_display=False):
+    """Run the form-switching simulation pipeline.
+
+    Orchestration order:
+
+    1. Warm up all JIT-compiled functions.
+    2. Plan the minimal-hop transition path (BFS on Hamming graph).
+    3. Build :class:`~control.supervisor.form_switch_supervisor.FormSwitchSupervisor`
+       — computes LQR gains and Lyapunov ROA thresholds for every target
+       configuration in the path.
+    4. Pack supervisor data into flat numpy arrays for the JIT loop.
+    5. Run the switching simulation via :func:`~simulation.loop.time_loop.simulate_switching`.
+    6. Analyse and visualise results.
+    7. Save figures and animation to ``images/``.
+
+    Parameters
+    ----------
+    cfg : SystemConfig
+        System configuration.
+    source : str
+        Starting equilibrium configuration (default "DDD").
+    target : str
+        Goal equilibrium configuration (default "UUU").
+    t_end : float
+        Total simulation time (seconds).
+    dt : float
+        Integration timestep (seconds).
+    k_energy : float
+        Energy shaping gain for the swing-up controller.
+    u_max : float
+        Actuator saturation limit (N).
+    no_display : bool
+        If True, skip ``plt.show()``.
+
+    Returns
+    -------
+    dict
+        Keys: ``t``, ``q``, ``dq``, ``u``, ``mode``, ``stage``, ``energy``,
+        ``path``, ``state``, ``animation``.
+    """
+    from control.supervisor.form_switch_supervisor import FormSwitchSupervisor
+    from control.supervisor.transition_graph import plan_transition
+    from simulation.loop.time_loop import simulate_switching
+
+    # 0. Warmup JIT
+    log.info("Warming up JIT-compiled functions...")
+    warmup_jit()
+
+    # 1. Plan transition path
+    path = plan_transition(source, target)
+    log.info("Transition path: %s", " -> ".join(path))
+
+    # 2. Build supervisor (LQR gains + ROA estimation for each stage target)
+    log.info("Building form-switch supervisor (LQR + ROA for %d stages)...",
+             len(path) - 1)
+    supervisor = FormSwitchSupervisor(cfg, k_energy=k_energy, u_max=u_max)
+
+    for name in path[1:]:
+        roa = supervisor._roa_data.get(name)
+        if roa is not None:
+            log.info("  %s ROA: rho=%.3f, rho_in=%.3f, success=%.0f%% (%d/%d)",
+                     name, roa["rho"], roa["rho_in"],
+                     roa["success_rate"] * 100,
+                     roa["n_converged"], roa["n_total"])
+        else:
+            log.warning("  %s: ROA estimation unavailable (using defaults)", name)
+
+    # 3. Pack for @njit loop
+    sv_data = supervisor.pack_for_njit(path)
+
+    # 4. Simulate
+    log.info("Running switching simulation (%.1f s, dt=%.4f)...", t_end, dt)
+    t, q, dq, u, mode, stage, energy = simulate_switching(
+        cfg, path, sv_data, t_end=t_end, dt=dt
+    )
+    log.info("Simulation complete: %d steps", len(t))
+
+    nan_mask = np.isnan(q[:, 0])
+    if np.any(nan_mask):
+        first_nan = int(np.where(nan_mask)[0][0])
+        log.warning("Switching simulation diverged at step %d / %d.", first_nan, len(t))
+
+    # 5. Analysis
+    from analysis.state.derived_state import compute_derived_state
+    state = compute_derived_state(cfg, q, dq)
+
+    # Energy dict for show_dynamics_plots (KE/PE not separately computed here)
+    energy_dict = {
+        "KE": np.zeros(len(t)),
+        "PE": np.zeros(len(t)),
+        "TE": energy,
+    }
+
+    # 6. Visualisation
+    fig_anim, ani = show_animation(cfg, t, state, dt=dt)
+    fig_dyn = show_dynamics_plots(t, q, dq, state, energy_dict, u_ctrl=u)
+
+    # 7. Save
+    log.info("Saving outputs...")
+    save_figure(fig_dyn, "switching_dynamics")
+    save_animation(ani, "switching_animation", fps=30)
+
+    if not no_display:
+        plt.show()
+
+    return {
+        "t": t,
+        "q": q,
+        "dq": dq,
+        "u": u,
+        "mode": mode,
+        "stage": stage,
+        "energy": energy,
+        "path": path,
+        "state": state,
+        "animation": ani,
+    }

@@ -2,7 +2,7 @@
 
 import numpy as np
 from control.linearization.linearize import linearize
-from control.cost_matrices.default_Q import default_Q
+from control.cost_matrices.default_Q import default_Q, equilibrium_Q
 from control.cost_matrices.default_R import default_R
 from control.riccati.solve_care import solve_riccati
 from control.gain_computation.compute_K import compute_K
@@ -54,3 +54,87 @@ def compute_lqr_gains(cfg, Q=None, R=None):
     K = compute_K(R, B, P)
 
     return K, A, B, P, Q, R
+
+
+def compute_all_lqr_gains(cfg, Q_override=None, R_override=None):
+    """Compute LQR gains for all 8 equilibrium configurations.
+
+    For each configuration the system is linearized at its equilibrium and
+    CARE is solved with a configuration-adapted cost matrix (upright links
+    penalized more heavily). A ValueError or LinAlgError for any configuration
+    is caught and stored as None.
+
+    Parameters
+    ----------
+    cfg : SystemConfig
+        System configuration. The internal _target_eq field is temporarily
+        modified per configuration and restored before returning.
+    Q_override : np.ndarray or None
+        If provided, use this Q for all configurations instead of
+        equilibrium_Q(). Must be (8,8) positive semi-definite.
+    R_override : np.ndarray or None
+        If provided, use this R for all configurations. Must be (1,1)
+        positive definite.
+
+    Returns
+    -------
+    dict
+        Maps config_name -> result_dict or None.
+        result_dict keys:
+            'K'              : gain matrix (1,8)
+            'A'              : state matrix (8,8)
+            'B'              : input matrix (8,1)
+            'P'              : Riccati solution (8,8)
+            'Q'              : cost matrix (8,8)
+            'R'              : input cost (1,1)
+            'q_eq'           : equilibrium configuration (4,)
+            'V_eq'           : physical potential energy at equilibrium (float, J)
+            'poles'          : closed-loop eigenvalues (8,)
+            'is_controllable': True (False configs are stored as None)
+            'is_stable'      : bool, all real parts < 0
+    """
+    from parameters.equilibrium import all_equilibria, equilibrium_potential_energy
+    from control.closed_loop import compute_closed_loop
+
+    R_mat = R_override if R_override is not None else default_R()
+
+    results = {}
+    original_eq = cfg._target_eq
+
+    for name, q_eq in all_equilibria().items():
+        cfg._target_eq = name
+        try:
+            p = cfg.pack()
+            A, B = linearize(q_eq, p)
+
+            Q = Q_override if Q_override is not None else equilibrium_Q(name)
+
+            n_x = A.shape[0]
+            n_u = B.shape[1] if B.ndim == 2 else 1
+            _validate_cost_matrices(Q, R_mat, n_x, n_u)
+
+            P = solve_riccati(A, B, Q, R_mat)
+            K = compute_K(R_mat, B, P)
+            cl = compute_closed_loop(A, B, K)
+
+            V_eq = equilibrium_potential_energy(cfg, name)
+
+            results[name] = {
+                'K': K,
+                'A': A,
+                'B': B,
+                'P': P,
+                'Q': Q,
+                'R': R_mat,
+                'q_eq': q_eq,
+                'V_eq': V_eq,
+                'poles': cl['poles'],
+                'is_controllable': True,
+                'is_stable': cl['is_stable'],
+            }
+        except (ValueError, np.linalg.LinAlgError):
+            results[name] = None
+        finally:
+            cfg._target_eq = original_eq
+
+    return results

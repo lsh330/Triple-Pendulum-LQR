@@ -132,3 +132,72 @@ def simulate(cfg, K, t_end=10.0, dt=0.001, impulse=0.0, disturbance=None,
                      "or unstable controller.", first_nan, N)
 
     return t_arr, q_arr, dq_arr, u_ctrl_arr, u_dist_arr, u_raw_peak, int(n_sat)
+
+
+def simulate_switching(cfg, transition_path, supervisor_data,
+                       t_end=30.0, dt=0.001):
+    """Run a form-switching simulation across multiple equilibrium configurations.
+
+    Calls the zero-allocation ``@njit`` switching loop which implements a
+    three-mode FSM (swing-up / LQR-catch / stabilised) per transition stage.
+
+    Parameters
+    ----------
+    cfg : SystemConfig
+        System configuration.
+    transition_path : list of str
+        Ordered list of equilibrium configuration names, e.g.
+        ``["DDD", "UDD", "UUD", "UUU"]``.  The first entry is the
+        starting configuration; subsequent entries are successive targets.
+    supervisor_data : dict
+        Output of :meth:`FormSwitchSupervisor.pack_for_njit`.
+    t_end : float
+        Total simulation duration (seconds).
+    dt : float
+        Integration timestep (seconds).
+
+    Returns
+    -------
+    t : (N,) float64
+        Time vector.
+    q : (N, 4) float64
+        Configuration trajectory [x, theta1, theta2, theta3].
+    dq : (N, 4) float64
+        Velocity trajectory.
+    u : (N,) float64
+        Applied control force trajectory (N).
+    mode : (N,) int32
+        FSM mode at each step (0=swing-up, 1=LQR-catch, 2=stabilised, -1=NaN).
+    stage : (N,) int32
+        Active transition stage at each step.
+    energy : (N,) float64
+        Physical total energy at each step (J).
+    """
+    from simulation.loop.time_loop_switching import _run_loop_switching
+    from parameters.equilibrium import equilibrium
+
+    N = int(t_end / dt) + 1
+    t = np.linspace(0.0, t_end, N)
+
+    # Start at rest at the source equilibrium
+    q0 = equilibrium(transition_path[0])
+    dq0 = np.zeros(4)
+    p = cfg.pack()
+
+    q, dq, u, mode, stage, energy = _run_loop_switching(
+        N, dt,
+        q0[0], q0[1], q0[2], q0[3],
+        dq0[0], dq0[1], dq0[2], dq0[3],
+        p,
+        supervisor_data["n_stages"],
+        supervisor_data["all_q_eq"],
+        supervisor_data["all_K_flat"],
+        supervisor_data["all_P_flat"],
+        supervisor_data["all_E_target"],
+        supervisor_data["all_rho_in"],
+        supervisor_data["all_rho_out"],
+        supervisor_data["k_energy"],
+        supervisor_data["u_max"],
+    )
+
+    return t, q, dq, u, mode, stage, energy

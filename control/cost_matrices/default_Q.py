@@ -35,3 +35,42 @@ def adaptive_Q(cfg):
 
     return np.diag([q_cart, q_th1, q_th2, q_th3,
                     q_dcart, q_dth1, q_dth2, q_dth3])
+
+
+def equilibrium_Q(config_name):
+    """Return Q matrix adapted to the given equilibrium configuration.
+
+    Upright links get high angle penalty (100), hanging links get low penalty (10).
+    Cart position penalty: 10. All velocity penalties: 1 (hanging) or 10 (upright).
+
+    Parameters
+    ----------
+    config_name : str
+        One of "DDD", "DDU", "DUD", "DUU", "UDD", "UDU", "UUD", "UUU".
+
+    Returns
+    -------
+    np.ndarray, shape (8, 8)
+        Diagonal state cost matrix Q.
+    """
+    from parameters.equilibrium import EQUILIBRIUM_CONFIGS
+    phi1, phi2, phi3 = EQUILIBRIUM_CONFIGS[config_name]
+
+    # Determine which links are upright (phi ≈ pi)
+    up1 = abs(phi1 - np.pi) < 0.1
+    up2 = abs(phi2 - np.pi) < 0.1
+    up3 = abs(phi3 - np.pi) < 0.1
+
+    q_weights = [
+        10.0,                        # cart position
+        100.0 if up1 else 10.0,      # theta1
+        100.0 if up2 else 10.0,      # theta2
+        100.0 if up3 else 10.0,      # theta3
+    ]
+    dq_weights = [
+        1.0,                         # cart velocity
+        10.0 if up1 else 1.0,        # omega1
+        10.0 if up2 else 1.0,        # omega2
+        10.0 if up3 else 1.0,        # omega3
+    ]
+    return np.diag(q_weights + dq_weights)
