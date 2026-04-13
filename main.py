@@ -72,6 +72,14 @@ def _build_parser():
     # Config file
     p.add_argument("--config", type=str, default=None, help="YAML config file path")
 
+    # Multi-equilibrium batch mode
+    p.add_argument("--all-equilibria", action="store_true",
+                   help="Generate visualizations for all 8 equilibrium configurations "
+                        "(saves to images/{NAME}/ per equilibrium)")
+    p.add_argument("--equilibria-list", type=str, default=None,
+                   help="Comma-separated subset of equilibria to process with --all-equilibria "
+                        "(e.g. 'UUU,DDD,UDD'). Ignored unless --all-equilibria is set.")
+
     # Output
     p.add_argument("--no-display", action="store_true", help="Skip matplotlib display")
     p.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING"], default="INFO", help="Log level")
@@ -168,13 +176,50 @@ def main(argv=None):
     cfg = SystemConfig(
         mc=args.mc, m1=args.m1, m2=args.m2, m3=args.m3,
         L1=args.L1, L2=args.L2, L3=args.L3, g=args.g,
+        actuator_saturation=args.u_max,
     )
 
     # Override target equilibrium when explicitly requested
     if args.equilibrium is not None:
         cfg.set_equilibrium(args.equilibrium)
 
-    if args.form_switch:
+    if getattr(args, "all_equilibria", False):
+        # 8개 평형점 전체(또는 지정 목록) 일괄 시각화 생성
+        from pipeline.multi_equilibrium_runner import run_all_equilibria
+        from parameters.equilibrium import EQUILIBRIUM_CONFIGS
+
+        equilibria = None
+        if getattr(args, "equilibria_list", None):
+            raw = [s.strip().upper() for s in args.equilibria_list.split(",")]
+            valid = set(EQUILIBRIUM_CONFIGS.keys())
+            invalid = [n for n in raw if n not in valid]
+            if invalid:
+                print(f"ERROR: 알 수 없는 평형점: {invalid}. "
+                      f"선택 가능: {list(valid)}")
+                sys.exit(1)
+            equilibria = raw
+
+        results = run_all_equilibria(
+            cfg,
+            t_end=args.t_end, dt=args.dt, impulse=args.impulse,
+            dist_amplitude=args.dist_amplitude,
+            dist_bandwidth=args.dist_bandwidth,
+            seed=args.seed, u_max=args.u_max,
+            equilibria=equilibria,
+        )
+        # 결과 요약 출력
+        print("\n평형점별 처리 결과:")
+        print(f"{'이름':>4}  {'성공':>4}  {'소요(s)':>8}  {'ROA%':>6}  {'정착(s)':>8}")
+        print("-" * 45)
+        for r in results:
+            if r["success"]:
+                print(f"{r['eq_name']:>4}  {'O':>4}  {r['elapsed']:>8.1f}  "
+                      f"{r['roa_rate']*100:>6.1f}  {r['settling_time']:>8.2f}")
+            else:
+                print(f"{r['eq_name']:>4}  {'X':>4}  {r['elapsed']:>8.1f}  "
+                      f"{'N/A':>6}  {'N/A':>8}")
+
+    elif args.form_switch:
         from pipeline.runner import run_switching
         run_switching(
             cfg,

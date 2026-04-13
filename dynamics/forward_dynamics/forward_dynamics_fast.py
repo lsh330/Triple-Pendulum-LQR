@@ -8,15 +8,17 @@ Computes ddq = M^{-1}(tau - C - G) with:
 """
 
 import numpy as np
-from numba import njit
+from numba import njit, float64
 
+_F64 = float64
 
-@njit(cache=True)
+@njit(float64(float64, float64, float64, float64, float64, float64, float64, float64, float64),
+      cache=True, fastmath=True, boundscheck=False)
 def _det3(a, b, c, d, e, f, g, h, i):
     return a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
 
 
-@njit(cache=True)
+@njit(cache=True, fastmath=True, boundscheck=False)
 def forward_dynamics_fast(q0, q1, q2, q3, dq0, dq1, dq2, dq3, u, p):
     """Compute 4 accelerations from scalar state. Returns (ddq0, ddq1, ddq2, ddq3).
 
@@ -160,7 +162,7 @@ def forward_dynamics_fast(q0, q1, q2, q3, dq0, dq1, dq2, dq3, u, p):
     return ddq0, ddq1, ddq2, ddq3
 
 
-@njit(cache=True)
+@njit(cache=True, fastmath=True, boundscheck=False)
 def rk4_step_fast(q0, q1, q2, q3, dq0, dq1, dq2, dq3, u, p, dt):
     """Single RK4 step using scalar state. Zero allocation."""
     hdt = 0.5 * dt

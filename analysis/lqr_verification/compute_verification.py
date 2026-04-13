@@ -1,4 +1,8 @@
-"""Compute all LQR verification metrics."""
+"""Compute all LQR verification metrics.
+
+W2: ``compute_robust_stability`` 추가 — 공칭 게인 K_nom 고정 후 섭동 플랜트에서
+폐루프 고유값 실수부를 추적하여 진정한 robust stability 를 검증.
+"""
 
 import warnings
 import numpy as np
@@ -192,4 +196,112 @@ def compute_monte_carlo_robustness(cfg, n_samples=50, perturbation=0.10, seed=42
         "mc_cl_poles": mc_cl_poles,
         "nominal_bode_mag": mag_nom_dB,
         "nominal_cl_poles": poles_nom,
+    }
+
+
+def compute_robust_stability(cfg, K_nom, n_samples=100,
+                             mass_pert=0.1, length_pert=0.05, seed=42):
+    """공칭 게인 K_nom 을 고정한 채 섭동 플랜트의 robust stability 를 검증한다.
+
+    W2: 기존 ``compute_monte_carlo_robustness`` 는 섭동 플랜트마다 게인을
+    재계산하므로 성능 테스트에 불과하다. 이 함수는 K_nom 을 고정하고
+    섭동된 (A_pert, B_pert) 에 대해 폐루프 A_pert - B_pert @ K_nom 의
+    고유값 실수부를 추적하여 진정한 robust stability 를 평가한다.
+
+    Parameters
+    ----------
+    cfg : SystemConfig
+        공칭 시스템 구성.
+    K_nom : np.ndarray, shape (1, 8) or (8,)
+        공칭 LQR 게인 행렬. 섭동 전반에 고정.
+    n_samples : int
+        몬테카를로 샘플 수 (기본 100).
+    mass_pert : float
+        질량 섭동 비율 (±fraction, 기본 10 %).
+    length_pert : float
+        길이 섭동 비율 (±fraction, 기본 5 %).
+    seed : int
+        난수 시드.
+
+    Returns
+    -------
+    dict with keys:
+        'all_stable'              : bool — 모든 샘플이 안정적인지 여부
+        'n_stable'                : int  — 안정한 샘플 수
+        'n_total'                 : int  — 전체 샘플 수
+        'stability_rate'          : float — n_stable / n_total
+        'worst_max_eig_real'      : float — 최악(가장 큰) 고유값 실수부
+        'worst_damping'           : float — 최악 감쇠비 (min across samples)
+        'worst_eigenvalue'        : complex — 최악 고유값
+        'max_eig_real_per_sample' : (n_total,) float array
+        'min_damping_per_sample'  : (n_total,) float array
+    """
+    from control.linearization.linearize import linearize
+
+    K_flat = K_nom.flatten().reshape(1, -1)  # (1, 8)
+
+    rng = np.random.RandomState(seed)
+    max_eig_reals = []
+    min_dampings = []
+    worst_eig = None
+    worst_max_re = -np.inf
+    worst_min_damp = np.inf
+    n_stable = 0
+
+    for _ in range(n_samples):
+        # 파라미터 섭동 스케일 생성
+        try:
+            cfg_pert = SystemConfig(
+                mc=cfg.mc * (1.0 + rng.uniform(-mass_pert, mass_pert)),
+                m1=cfg.m1 * (1.0 + rng.uniform(-mass_pert, mass_pert)),
+                m2=cfg.m2 * (1.0 + rng.uniform(-mass_pert, mass_pert)),
+                m3=cfg.m3 * (1.0 + rng.uniform(-mass_pert, mass_pert)),
+                L1=cfg.L1 * (1.0 + rng.uniform(-length_pert, length_pert)),
+                L2=cfg.L2 * (1.0 + rng.uniform(-length_pert, length_pert)),
+                L3=cfg.L3 * (1.0 + rng.uniform(-length_pert, length_pert)),
+                g=cfg._phys.g,
+            )
+        except ValueError:
+            continue
+
+        # 섭동 플랜트 선형화 — 공칭 평형점에서 (게인은 공칭 K_nom 고정)
+        p_pert = cfg_pert.pack()
+        q_eq = cfg.equilibrium
+        A_pert, B_pert = linearize(q_eq, p_pert)
+
+        # 폐루프 행렬: A_pert - B_pert @ K_nom (게인 재계산 없음)
+        A_cl_pert = A_pert - B_pert @ K_flat
+
+        eigs = np.linalg.eigvals(A_cl_pert)
+        max_re = float(np.max(eigs.real))
+        wn = np.abs(eigs)
+        damp = np.where(wn > 1e-10, -eigs.real / wn, 1.0)
+        min_damp = float(np.min(damp.real))
+
+        max_eig_reals.append(max_re)
+        min_dampings.append(min_damp)
+
+        if max_re < 0:
+            n_stable += 1
+
+        # 최악 샘플 추적
+        if max_re > worst_max_re:
+            worst_max_re = max_re
+            worst_eig = eigs[np.argmax(eigs.real)]
+        if min_damp < worst_min_damp:
+            worst_min_damp = min_damp
+
+    n_total = len(max_eig_reals)
+    all_stable = (n_stable == n_total) and (n_total > 0)
+
+    return {
+        "all_stable": bool(all_stable),
+        "n_stable": int(n_stable),
+        "n_total": int(n_total),
+        "stability_rate": float(n_stable / n_total) if n_total > 0 else 0.0,
+        "worst_max_eig_real": float(worst_max_re),
+        "worst_damping": float(worst_min_damp),
+        "worst_eigenvalue": worst_eig,
+        "max_eig_real_per_sample": np.array(max_eig_reals),
+        "min_damping_per_sample": np.array(min_dampings),
     }

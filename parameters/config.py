@@ -12,9 +12,13 @@ from parameters.equilibrium import (
 
 
 class SystemConfig:
+    # 액추에이터 포화 기본값 (N) — W1: ROA 모듈 간 일관성을 위해 중앙 관리
+    DEFAULT_ACTUATOR_SATURATION: float = 200.0
+
     def __init__(self, mc: float, m1: float, m2: float, m3: float,
                  L1: float, L2: float, L3: float, g: float = 9.81,
-                 target_equilibrium: str = "UUU"):
+                 target_equilibrium: str = "UUU",
+                 actuator_saturation: float = 200.0):
         # Validate that mass and length parameters are positive and g > 0
         for name, val in [('mc', mc), ('m1', m1), ('m2', m2), ('m3', m3),
                           ('L1', L1), ('L2', L2), ('L3', L3)]:
@@ -22,6 +26,8 @@ class SystemConfig:
                 raise ValueError(f"Parameter '{name}' must be positive, got {val}")
         if g <= 0:
             raise ValueError(f"Parameter 'g' must be positive, got {g}")
+        if actuator_saturation <= 0:
+            raise ValueError(f"Parameter 'actuator_saturation' must be positive, got {actuator_saturation}")
         if target_equilibrium not in EQUILIBRIUM_CONFIGS:
             raise ValueError(
                 f"Unknown target_equilibrium '{target_equilibrium}'. "
@@ -32,6 +38,8 @@ class SystemConfig:
                                     L1=L1, L2=L2, L3=L3, g=g)
         self._derived = compute_derived(self._phys)
         self._target_eq = target_equilibrium
+        # W1: 액추에이터 포화 한계 — ROA/제어 모듈이 cfg에서 참조
+        self.actuator_saturation: float = float(actuator_saturation)
 
     # Expose physical params as attributes
     def __getattr__(self, name: str):

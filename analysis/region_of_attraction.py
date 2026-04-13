@@ -4,11 +4,18 @@ Uses a single @njit function with parallel prange for maximum speed.
 The legacy _run_loop is used here because parallel=True compilation of the
 monolithic fast loop is prohibitively slow. Since ROA runs many short
 simulations, the per-call overhead is less critical than compilation time.
+
+W1 수정사항
+-----------
+- ``u_max`` 기본값을 ``1e30`` (사실상 무제한)에서 ``200.0 N`` 으로 수정.
+- ``estimate_roa`` 가 ``cfg.actuator_saturation`` 을 통해 포화 한계를 읽도록 변경.
+- 공통 Wilson-score CI 수렴 로직은 ``analysis.roa_utils`` 모듈로 통합.
 """
 
 import numpy as np
 from numba import njit, prange
 from dynamics.forward_dynamics.forward_dynamics_fast import forward_dynamics_fast, rk4_step_fast
+from analysis.roa_utils import get_u_max, wilson_ci_width
 
 
 @njit(cache=True)
@@ -20,10 +27,10 @@ def _angle_wrap(dx):
     return dx
 
 
-@njit(cache=True, parallel=True)
+@njit(cache=True, parallel=True, fastmath=True, boundscheck=False)
 def _roa_batch(n_samples, N, dt, q_eq, K_flat, p,
                theta1_devs, theta2_devs, theta3_devs, conv_threshold,
-               u_max=1e30, cart_limit=2.0, angle_limit=1.5708):
+               u_max=200.0, cart_limit=2.0, angle_limit=1.5708):
     """Run ROA simulations in parallel using fast scalar dynamics."""
     converged = np.zeros(n_samples, dtype=np.bool_)
     eq0 = q_eq[0]; eq1 = q_eq[1]; eq2 = q_eq[2]; eq3 = q_eq[3]
@@ -118,7 +125,13 @@ def estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, dt=0.001,
     Runs batches of Monte Carlo simulations until the 95% confidence
     interval for the success rate is narrower than convergence_ci_width,
     or max_samples is reached.
+
+    W1: ``u_max`` 는 ``cfg.actuator_saturation`` (기본 200 N) 에서 읽으며,
+    Wilson-score CI 계산은 ``analysis.roa_utils.wilson_ci_width`` 로 통일.
     """
+    # W1: cfg.actuator_saturation 에서 포화 한계 읽기
+    u_max = get_u_max(cfg)
+
     rng = np.random.RandomState(seed)
     q_eq = cfg.equilibrium
     p = cfg.pack()
@@ -152,7 +165,7 @@ def estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, dt=0.001,
 
         converged = _roa_batch(current_batch, N, dt, q_eq, K_flat, p,
                                theta1_devs, theta2_devs, theta3_devs,
-                               conv_threshold)
+                               conv_threshold, u_max=u_max)
 
         all_theta1[total_samples:total_samples + current_batch] = theta1_devs
         all_theta2[total_samples:total_samples + current_batch] = theta2_devs
@@ -160,15 +173,9 @@ def estimate_roa(cfg, K, n_samples=500, max_angle_deg=45, dt=0.001,
         all_converged[total_samples:total_samples + current_batch] = converged
         total_samples += current_batch
 
-        # Check convergence of estimate (only filled portion)
-        rate = np.mean(all_converged[:total_samples])
-        # Wilson score 95% CI width
-        z = 1.96
-        n = total_samples
-        denom = 1 + z*z/n
-        center = (rate + z*z/(2*n)) / denom
-        margin = z * np.sqrt((rate*(1-rate) + z*z/(4*n)) / n) / denom
-        ci_width = 2 * margin
+        # W1: Wilson score 95% CI 폭 — 공통 유틸로 계산
+        n_conv = int(np.sum(all_converged[:total_samples]))
+        ci_width = wilson_ci_width(n_conv, total_samples)
 
         if total_samples >= n_samples and ci_width < convergence_ci_width:
             break

@@ -19,7 +19,7 @@ def _angle_wrap(dx):
     return dx
 
 
-@njit(cache=True)
+@njit(cache=True, fastmath=True, boundscheck=False)
 def _run_loop_fast(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max):
     """Zero-allocation simulation loop with scalar state.
 
@@ -124,7 +124,7 @@ def _run_loop_fast(N, dt, q0, dq0, q_eq, K_flat, p, disturbance, u_max):
     return q_arr, dq_arr, u_ctrl_arr, u_dist_arr, u_raw_peak, n_saturated
 
 
-@njit(cache=True)
+@njit(cache=True, fastmath=True, boundscheck=False)
 def _run_loop_gs_fast(N, dt, q0, dq0, q_eq, p, disturbance,
                       gs_dev_angles, gs_K_gains, gs_slopes, u_max):
     """Zero-allocation gain-scheduled simulation loop with cubic Hermite interpolation.

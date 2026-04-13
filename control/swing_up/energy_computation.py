@@ -20,7 +20,7 @@ import numpy as np
 from numba import njit
 
 
-@njit(cache=True)
+@njit(cache=True, fastmath=True, boundscheck=False)
 def total_energy_scalar(sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3, p):
     """Compute physical total energy E = KE - PE_code.
 
@@ -97,7 +97,7 @@ def total_energy_scalar(sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3, p):
     return KE - PE_code
 
 
-@njit(cache=True)
+@njit(cache=True, fastmath=True, boundscheck=False)
 def target_energy_from_phis(phi1_target, phi2_target, phi3_target, p):
     """Compute target physical energy at an equilibrium (KE=0).
 

@@ -4,3 +4,5 @@ numba>=0.57,<0.61
 matplotlib>=3.6,<3.10
 pillow>=9.0,<11.0
 pyyaml>=6.0,<7.0
+# W6: Common Lyapunov LMI 검증 (선택적 — 미설치 시 평균 P 근사로 폴백)
+cvxpy>=1.4

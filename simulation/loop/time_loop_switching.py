@@ -28,7 +28,7 @@ MODE_LQR_CATCH = 1
 MODE_STABILIZED = 2
 
 
-@njit(cache=True)
+@njit(cache=True, fastmath=True, boundscheck=False)
 def _lyapunov_value(sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3, q_eq, P_flat):
     """Compute scalar Lyapunov value V = z^T P z.
 
@@ -114,7 +114,7 @@ def _lyapunov_value(sq0, sq1, sq2, sq3, sdq0, sdq1, sdq2, sdq3, q_eq, P_flat):
     return V
 
 
-@njit(cache=True)
+@njit(cache=True, fastmath=True, boundscheck=False)
 def _run_loop_switching(
     N, dt,
     sq0_init, sq1_init, sq2_init, sq3_init,

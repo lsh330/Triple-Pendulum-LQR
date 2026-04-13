@@ -27,6 +27,7 @@ from visualization.lqr_plots.show_lqr_plots import show_lqr_plots
 from visualization.comparison_plots.show_comparison_plots import show_comparison_plots
 from analysis.region_of_attraction import estimate_roa
 from analysis.gain_scheduling_stability import verify_gain_scheduling_stability
+from analysis.performance.rms_error import compute_channel_rms
 from control.gain_scheduling import GainScheduler, MultiAxisGainScheduler
 from visualization.roa_plots.show_roa_plots import show_roa_plots
 from simulation.warmup import warmup_jit
@@ -122,6 +123,21 @@ def run(cfg, t_end=T_END, dt=DT, impulse=IMPULSE,
     mc_robustness = compute_monte_carlo_robustness(cfg)
     print_summary(q, dq, state, u_ctrl, u_dist, freq_data,
                   u_max=u_max, u_raw_peak=u_raw_peak, n_saturated=n_sat)
+
+    # W3: 개별 상태 채널 RMS 오차 계산
+    states_full = np.hstack([q, dq])                            # (N, 8)
+    eq_state_full = np.concatenate([q_eq, np.zeros(4)])         # (8,)
+    rms_data = compute_channel_rms(states_full, eq_state_full, t)
+    log.info(
+        "Channel RMS — cart: %.4f m | phi1: %.4f rad | phi2: %.4f rad | phi3: %.4f rad",
+        rms_data["cart_rms"], rms_data["phi1_rms"],
+        rms_data["phi2_rms"], rms_data["phi3_rms"],
+    )
+    log.info(
+        "Channel RMS — vx: %.4f m/s | w1: %.4f | w2: %.4f | w3: %.4f rad/s",
+        rms_data["vx_rms"], rms_data["w1_rms"],
+        rms_data["w2_rms"], rms_data["w3_rms"],
+    )
 
     # 4b. ROA and Gain Scheduling stability
     log.info("Estimating Region of Attraction...")
