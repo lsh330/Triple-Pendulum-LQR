@@ -5,3 +5,15 @@ __pycache__/
 config.yaml
 *.yaml
 !config.example.yaml
+
+# 임시 벤치마크/실험 스크립트 (perf-optimizer 산출물은 저장소에 커밋하지 않음)
+bench_*.py
+verify_accuracy.py
+cpp_ext/
+
+# 편집기/OS 잔여물
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+

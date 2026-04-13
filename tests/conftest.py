@@ -1,4 +1,7 @@
 """Shared test fixtures for triple pendulum simulation."""
+import matplotlib
+matplotlib.use("Agg")  # CI/CD 및 headless 환경에서 Tcl/Tk 의존 제거
+
 import pytest
 import numpy as np
 from parameters.config import SystemConfig
