@@ -20,11 +20,13 @@ control/  simulation/  analysis/  visualization/  parameters/    utils/
   |      |               |            |         equilibrium.py     |
   v      v               v            v         derived.py         v
 lqr.py  mass_matrix/   energy/     animation/  packing.py     logger.py
-ilqr.py gravity/       frequency/  dynamics_plots/             output_manager.py
-gain_scheduling.py     state/      control_plots/              data_logger.py
+ilqr.py gravity/       frequency/  dynamics_plots/
+gain_scheduling.py     state/      control_plots/
 swing_up/              lqr_verif/  lqr_plots/
 supervisor/            region_of_  switching_plots/
-                       attraction
+robust_stability.py    attraction
+channel_rms.py
+trim_solver.py
 ```
 
 ### 핵심 의존 관계
@@ -96,8 +98,8 @@ def rk4_step_fast(...):
     ...
 ```
 
-- 첫 실행: JIT 컴파일 (~10-30ms)
-- 이후 실행: 캐시에서 로드 (~1ms)
+- 첫 실행: JIT 컴파일 (~10–30 ms)
+- 이후 실행: 캐시에서 로드 (~1 ms)
 - `prebuild_cache.py`: 모든 JIT 함수를 사전 컴파일
 
 ### 3.3 Warmup 패턴
@@ -118,10 +120,10 @@ _run_loop_fast(3, dt, q0, dq0, q_eq, K_flat, p, np.empty(0), u_max)
 
 두 경로는 동일한 물리 방정식을 구현하지만, 성능 최적화 수준이 다르다:
 
-- **스칼라 경로**: 삼각함수 12회, 곱셈/덧셈 ~150회, 할당 0회
+- **스칼라 경로**: 삼각함수 12회, 곱셈/덧셈 약 150회, 할당 0회
 - **배열 경로**: numpy 배열 연산, 가독성 우선, 야코비안 수치미분에 적합
 
-`test_dynamics.py`의 `test_forward_dynamics_consistency`가 두 경로의 일치를 검증.
+`test_dynamics.py`의 `test_forward_dynamics_consistency`가 두 경로의 일치를 검증한다.
 
 ---
 
@@ -159,17 +161,19 @@ supervisor.pack_for_njit(path) → {
 }
 ```
 
-모든 데이터가 float64 numpy 배열로 직렬화되어 `@njit` 루프에 전달됨.
+모든 데이터가 float64 numpy 배열로 직렬화되어 `@njit` 루프에 전달된다.
 
 ### 5.3 전이 경로 계획
 
 8개 평형점을 3비트 이진수로 매핑 (D=0, U=1):
+
 ```
 DDD=000, DDU=001, DUD=010, DUU=011
 UDD=100, UDU=101, UUD=110, UUU=111
 ```
 
 인접 구성 = Hamming distance 1 (한 비트 플립). BFS로 최단 경로 탐색:
+
 ```
 plan_transition("DDD", "UUU")
 → ["DDD", "DDU", "DUU", "UUU"]  (3단계, 각 1링크씩 전환)
@@ -177,7 +181,63 @@ plan_transition("DDD", "UUU")
 
 ---
 
-## 6. 테스트 구조
+## 6. 신규 모듈 (v3.0)
+
+### 6.1 `control/robust_stability.py` — `compute_robust_stability`
+
+공칭 LQR 게인을 **고정**한 채 질량/길이 파라미터를 랜덤 섭동하여 폐루프 극점이 모두 좌반평면(LHP)에 유지되는지 검증한다. 섭동 범위와 샘플 수는 인수로 지정한다.
+
+```python
+result = compute_robust_stability(
+    nominal_K, A_nominal, B_nominal,
+    param_perturb_frac=0.10,   # ±10% 섭동
+    n_samples=200
+)
+# result: {"pass_rate": float, "min_real_eig": float}
+```
+
+### 6.2 `control/channel_rms.py` — `compute_channel_rms`
+
+시뮬레이션 출력 배열에서 각 상태 채널(x, θ₁, θ₂, θ₃, ẋ, θ̇₁, θ̇₂, θ̇₃)의 RMS를 계산한다. 정상상태 구간(전체 시간의 후반 50%)과 과도 구간을 분리하여 보고한다.
+
+### 6.3 `control/trim_solver.py` — `trim_solver`
+
+게인 스케줄링에서 사용하는 **엄밀 운영점(trim point)**을 계산한다. 단순히 각도를 고정하는 대신, $G(\mathbf{q}^*) = 0$을 만족하는 실제 정적 평형점을 뉴턴법으로 탐색한다. 이를 통해 gain scheduling 이론에서 요구하는 평형족(family of equilibria)을 정확히 정의한다.
+
+### 6.4 `control/supervisor/` — `verify_slow_variation` & `verify_common_lyapunov`
+
+**`verify_slow_variation`**: Shamma-Athans(1990) 이론에 기반하여 스케줄링 파라미터가 충분히 느리게 변화하는지 검사한다. 게인 스케줄링 폐루프 시스템의 안정성 보장을 위한 충분 조건이다.
+
+**`verify_common_lyapunov`**: 모든 운영점에서 동시에 성립하는 공통 Lyapunov 함수의 존재 여부를 LMI(선형 행렬 부등식)로 검증한다. `cvxpy`가 설치된 경우에만 활성화된다.
+
+### 6.5 `--all-equilibria` CLI 플래그
+
+8개 평형점 전체를 순차적으로 시뮬레이션하고 결과를 `images/{DDD,DDU,...,UUU}/` 디렉토리에 각각 저장한다. ROA 성공률과 정착시간을 콘솔 테이블로 출력한다.
+
+### 6.5 `analysis/roa_utils.py` — Wilson CI 공통 유틸
+
+`wilson_ci_width`, `adaptive_sample_count`, `get_u_max` 등을 제공하여 `analysis/region_of_attraction.py`와 `control/supervisor/roa_estimation.py` 두 ROA 모듈이 동일한 **적응형 Monte Carlo 샘플링 전략**과 **구동기 포화 정책**을 공유하도록 한다. 이로써 두 모듈의 ROA 추정값이 항상 일관성을 유지한다.
+
+### 6.6 `analysis/performance/rms_error.py` — 채널별 RMS
+
+시뮬레이션 결과로부터 카트 위치, 3 링크 절대각, 카트 속도, 3 링크 각속도의 RMS 오차를 개별 채널 단위로 계산한다. `pipeline/runner.py`에서 자동 호출되며 CHANGELOG/REVIEW 목적의 정량 지표를 제공한다.
+
+### 6.7 `pipeline/multi_equilibrium_runner.py` — 8평형점 일괄 처리
+
+`run_all_equilibria()`가 8개 평형점 각각에 대해 LQR → 시뮬레이션 → 분석 → 시각화를 독립 디렉토리(`images/{NAME}/`)에 저장하고, 마지막에 `summary_grid.png`로 4×2 비교 그리드를 생성한다. CLI `--all-equilibria`, `--equilibria-list "DDD,UUU,…"`로 호출 가능하다.
+
+### 6.8 `--all-equilibria` / `--equilibria-list` CLI
+
+- `--all-equilibria`: 8개 평형점 전체 순회
+- `--equilibria-list "UDD,UUU"`: 쉼표 구분 부분 집합만 실행
+
+### 6.9 Korean Font 자동 검출
+
+`visualization/common/korean_font.py`가 플랫폼별 한글 폰트 경로를 탐색하여 matplotlib에 자동 등록한다. Windows(맑은 고딕), macOS(AppleGothic), Linux(NanumGothic) 순서로 시도하며, 미발견 시 `DejaVu Sans`로 폴백한다.
+
+---
+
+## 7. 테스트 구조
 
 ```
 tests/
@@ -195,7 +255,7 @@ tests/
 └── test_utils.py                # OutputManager, DataLogger
 ```
 
-**180개 테스트**, 전부 PASS. `pytest tests/ -v`로 실행.
+**238개 테스트**, 전부 PASS. `pytest tests/ -v`로 실행한다. (기존 180 + W1~W6 수정 검증 40개 + 다중 평형점 시각화 18개)
 
 ### 검증 기준
 
@@ -209,13 +269,13 @@ tests/
 
 ---
 
-## 7. 성능 벤치마크
+## 8. 성능 벤치마크
 
-| 항목 | 성능 |
+| 항목 | 성능 (환경 의존) |
 |------|------|
-| 표준 시뮬레이션 (15초) | 2,674× 실시간 |
-| Switching 시뮬레이션 (30초) | 2,010× 실시간 |
-| 에너지 계산 단일 호출 | 536 ns |
-| ROA 추정 (300 샘플) | 0.39 s |
+| 표준 시뮬레이션 (15초) | 약 **2,000~3,200배** 실시간 |
+| Switching 시뮬레이션 (30초) | 약 **1,300~2,000배** 실시간 |
+| 에너지 계산 단일 호출 | 약 **540~680 ns** |
+| ROA 추정 (적응형, 300~2000 샘플) | 약 **0.10~0.13 s** (적응 샘플링 + 병렬 커널 기준) |
 
-`python benchmark.py`로 측정 가능.
+`python benchmark.py`로 측정 가능하다. 상세 성능 분석은 [PERFORMANCE.md](PERFORMANCE.md)를 참조한다.
